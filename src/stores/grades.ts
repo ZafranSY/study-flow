@@ -1,114 +1,112 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import type { Assessment, Grade, StudentRecord, RemarkRequest } from '../types'
+import type { Assessment, Grade, RemarkRequest } from '../types'
+
+// Define the base URL for your API to match the backend routes
+const API_BASE_URL = 'http://localhost:8219/api';
 
 export const useGradesStore = defineStore('grades', () => {
-  const assessments = ref<Assessment[]>([
-    {
-      id: '1',
-      title: 'Quiz 1: Variables and Data Types',
-      type: 'quiz',
-      courseId: 'CS101',
-      totalMarks: 20,
-      weightage: 10,
-      dueDate: '2024-01-15',
-      description: 'Basic programming concepts'
-    },
-    {
-      id: '2',
-      title: 'Assignment 1: Calculator App',
-      type: 'assignment',
-      courseId: 'CS101',
-      totalMarks: 100,
-      weightage: 25,
-      dueDate: '2024-02-01',
-      description: 'Build a simple calculator'
-    },
-    {
-      id: '3',
-      title: 'Midterm Exam',
-      type: 'exam',
-      courseId: 'CS101',
-      totalMarks: 100,
-      weightage: 35,
-      dueDate: '2024-03-15',
-      description: 'Comprehensive midterm examination'
-    }
-  ])
+  // --- STATE ---
+  // These refs will hold the data fetched from the backend
+  const assessments = ref<Assessment[]>([])
+  const grades = ref<Grade[]>([])
+  const students = ref<any[]>([]) // For the lecturer's student list
+  const isLoading = ref(false)
 
-  const grades = ref<Grade[]>([
-    {
-      id: '1',
-      studentId: '2',
-      assessmentId: '1',
-      courseId: 'CS101',
-      marks: 18,
-      submittedAt: '2024-01-15',
-      feedback: 'Good understanding of concepts'
-    },
-    {
-      id: '2',
-      studentId: '2',
-      assessmentId: '2',
-      courseId: 'CS101',
-      marks: 85,
-      submittedAt: '2024-02-01',
-      feedback: 'Excellent implementation'
-    }
-  ])
+  // --- ACTIONS ---
 
-  const remarkRequests = ref<RemarkRequest[]>([])
+  /**
+   * Fetches all students for a specific lecturer.
+   * @param lecturerUsername - The username of the lecturer.
+   */
+  async function fetchLecturerData(lecturerUsername: string) {
+    isLoading.value = true;
+    const token = sessionStorage.getItem('token');
+
+    if (!token) {
+      console.error('No authentication token found.');
+      isLoading.value = false;
+      return null;
+    }
+
+    try {
+      const headers = {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      };
+
+      const response = await fetch(`${API_BASE_URL}/lecturers/${lecturerUsername}/students`, { headers });
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch lecturer data. Status: ${response.status}`);
+      }
+
+      const lecturerData = await response.json();
+      console.log("Data for lecturer:", lecturerData);
+      students.value = lecturerData; // Store the fetched students
+      return lecturerData;
+
+    } catch (error) {
+      console.error('Error fetching lecturer data:', error);
+      return null;
+    } finally {
+      isLoading.value = false;
+    }
+  }
+
+  /**
+   * Fetches all necessary data (grades, assessments) for the logged-in student.
+   */
+  async function fetchStudentData() {
+    isLoading.value = true;
+    const token = sessionStorage.getItem('token');
+
+    if (!token) {
+      console.error('No authentication token found.');
+      isLoading.value = false;
+      return;
+    }
+
+    try {
+      const headers = {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      };
+
+      // Fetch grades and assessments in parallel using existing backend endpoints.
+      // The backend will automatically filter by the student's token.
+      const [gradesResponse, assessmentsResponse] = await Promise.all([
+        fetch(`${API_BASE_URL}/student-marks`, { headers }),
+        fetch(`${API_BASE_URL}/assessment-components`, { headers })
+      ]);
+
+      if (!gradesResponse.ok || !assessmentsResponse.ok) {
+        throw new Error('Failed to fetch data from the server.');
+      }
+
+      // Update the store's state with data from the API
+      grades.value = await gradesResponse.json();
+      assessments.value = await assessmentsResponse.json();
+
+    } catch (error) {
+      console.error('Error fetching student data:', error);
+    } finally {
+      isLoading.value = false;
+    }
+  }
+
+  // --- GETTERS (Functions to process the data) ---
 
   const getStudentGrades = (studentId: string, courseId?: string) => {
-    return grades.value.filter(g => 
+    return grades.value.filter(g =>
       g.studentId === studentId && (!courseId || g.courseId === courseId)
     )
   }
 
-  const getCourseAssessments = (courseId: string) => {
-    return assessments.value.filter(a => a.courseId === courseId)
-  }
-
-  const addGrade = (grade: Omit<Grade, 'id'>) => {
-    const newGrade: Grade = {
-      ...grade,
-      id: Date.now().toString()
-    }
-    grades.value.push(newGrade)
-    return newGrade
-  }
-
-  const updateGrade = (gradeId: string, updates: Partial<Grade>) => {
-    const index = grades.value.findIndex(g => g.id === gradeId)
-    if (index !== -1) {
-      grades.value[index] = { ...grades.value[index], ...updates }
-    }
-  }
-
-  const addAssessment = (assessment: Omit<Assessment, 'id'>) => {
-    const newAssessment: Assessment = {
-      ...assessment,
-      id: Date.now().toString()
-    }
-    assessments.value.push(newAssessment)
-    return newAssessment
-  }
-
-  const submitRemarkRequest = (request: Omit<RemarkRequest, 'id' | 'createdAt' | 'status'>) => {
-    const newRequest: RemarkRequest = {
-      ...request,
-      id: Date.now().toString(),
-      status: 'pending',
-      createdAt: new Date().toISOString()
-    }
-    remarkRequests.value.push(newRequest)
-    return newRequest
-  }
-
   const calculateStudentTotal = (studentId: string, courseId: string) => {
     const studentGrades = getStudentGrades(studentId, courseId)
-    const courseAssessments = getCourseAssessments(courseId)
-    
+    const courseAssessments = assessments.value.filter(a => a.courseId === courseId);
+
     let totalWeightedMarks = 0
     let totalWeightage = 0
 
@@ -124,16 +122,16 @@ export const useGradesStore = defineStore('grades', () => {
     return totalWeightage > 0 ? (totalWeightedMarks / totalWeightage) * 100 : 0
   }
 
+  // --- RETURN ---
+  // Export everything so your components can use it.
   return {
     assessments,
     grades,
-    remarkRequests,
+    students,
+    isLoading,
+    fetchLecturerData,
+    fetchStudentData,
     getStudentGrades,
-    getCourseAssessments,
-    addGrade,
-    updateGrade,
-    addAssessment,
-    submitRemarkRequest,
-    calculateStudentTotal
+    calculateStudentTotal,
   }
 })
