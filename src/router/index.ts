@@ -11,7 +11,6 @@ import Reports from '../views/Reports.vue'
 import Profile from '../views/Profile.vue'
 
 const router = createRouter({
-<<<<<<< Updated upstream
     history: createWebHistory(),
     routes: [
         {
@@ -78,74 +77,6 @@ const router = createRouter({
             meta: { requiresAuth: true }
         }
     ]
-=======
-  history: createWebHistory(),
-  routes: [
-    {
-      path: '/',
-      redirect: '/login'
-    },
-    {
-      path: '/login',
-      name: 'Login',
-      component: Login
-    },
-    {
-      path: '/student',
-      name: 'StudentDashboard',
-      component: StudentDashboard,
-      // meta: { requiresAuth: true, role: 'student' }
-    },
-    {
-      path: '/student/grades',
-      name: 'StudentGrades',
-      component: StudentGrades,
-      // meta: { requiresAuth: true, role: 'student' }
-    },
-    {
-      path: '/student/progress',
-      name: 'StudentProgress',
-      component: StudentProgress,
-      // meta: { requiresAuth: true, role: 'student' }
-    },
-    {
-      path: '/lecturer',
-      name: 'LecturerDashboard',
-      component: LecturerDashboard,
-      // meta: { requiresAuth: true, role: 'lecturer' }
-    },
-    {
-      path: '/advisor',
-      name: 'AdvisorDashboard',
-      component: AdvisorDashboard,
-      // meta: { requiresAuth: true, role: 'advisor' }
-    },
-    {
-      path: '/advisor/reports',
-      name: 'Reports',
-      component: Reports,
-      // meta: { requiresAuth: true, role: 'advisor' }
-    },
-    {
-      path: '/admin',
-      name: 'AdminDashboard',
-      component: AdminDashboard,
-      // meta: { requiresAuth: true, role: 'admin' }
-    },
-    {
-      path: '/admin/users',
-      name: 'UserManagement',
-      component: UserManagement,
-      // meta: { requiresAuth: true, role: 'admin' }
-    },
-    {
-      path: '/profile',
-      name: 'Profile',
-      component: Profile,
-      meta: { requiresAuth: true }
-    }
-  ]
->>>>>>> Stashed changes
 })
 
 router.beforeEach((to, from, next) => {
