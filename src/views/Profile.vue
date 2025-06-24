@@ -14,9 +14,7 @@
                         <div class="mb-6">
                             <img :src="profileData.profilePicture" alt="Profile Picture"
                                 class="h-32 w-32 rounded-full mx-auto object-cover border-4 border-white shadow-lg">
-                            <!-- <button @click="showImageUpload = true" class="mt-4 btn-secondary text-sm">
-                                Change Photo
-                            </button> -->
+
                         </div>
 
                         <h3 class="text-xl font-semibold text-gray-900">{{ profileData.name }}</h3>
@@ -97,45 +95,15 @@
                 </div>
             </div>
 
-            <div v-if="showImageUpload"
-                class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                <div class="bg-white rounded-lg p-6 w-full max-w-md m-4">
-                    <div class="flex justify-between items-center mb-4">
-                        <h4 class="text-lg font-semibold text-gray-900">Change Profile Picture</h4>
-                        <button @click="showImageUpload = false" class="text-gray-400 hover:text-gray-600">
-                            <XMarkIcon class="h-6 w-6" />
-                        </button>
-                    </div>
-
-                    <div class="space-y-4">
-                        <!-- <div class="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
-                            <CameraIcon class="mx-auto h-12 w-12 text-gray-400" />
-                            <div class="mt-2">
-                                <label class="cursor-pointer">
-                                    <span class="text-sm text-primary-600 hover:text-primary-500">Upload a file</span>
-                                    <input type="file" class="sr-only" accept="image/*" @change="handleImageUpload">
-                                </label>
-                                <p class="text-xs text-gray-500 mt-1">PNG, JPG, GIF up to 10MB</p>
-                            </div>
-                        </div> -->
-
-                        <div class="flex justify-end space-x-3">
-                            <button @click="showImageUpload = false" class="btn-secondary">Cancel</button>
-                            <button class="btn-primary">Save Photo</button>
-                        </div>
-                    </div>
-                </div>
-            </div>
+            
         </div>
     </div>
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
-import { XMarkIcon,  } from '@heroicons/vue/24/outline';
 import Navigation from '../components/shared/Navigation.vue';
 
-const showImageUpload = ref(false);
 const twoFactorEnabled = ref(false); // Can be set dynamically if 2FA status is in user data
 
 const profileData = ref({
@@ -185,15 +153,4 @@ const getRoleBadgeColor = (role: string) => {
     return colors[role as keyof typeof colors] || 'bg-gray-100 text-gray-800';
 };
 
-// const handleImageUpload = (event: Event) => {
-//     const target = event.target as HTMLInputElement;
-//     if (target.files && target.files[0]) {
-//         const file = target.files[0];
-
-//         console.log('Attempting to upload image:', file.name);
-
-//         alert('Image upload simulated. In a real app, this would send to a server.');
-//         showImageUpload.value = false; 
-//     }
-// };
 </script>
