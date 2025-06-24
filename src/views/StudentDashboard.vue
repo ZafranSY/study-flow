@@ -15,11 +15,11 @@
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <!-- Performance Chart -->
         <div class="lg:col-span-2">
-          <PerformanceChart
-            title="Performance Trend"
-            :data="performanceData"
-            color="#3b82f6"
-          />
+          
+          <StudentPerformanceChart 
+          title="Performance Trend"
+            :data="studentData"
+            color="#3b82f6"/>
         </div>
 
         <div class="card">
