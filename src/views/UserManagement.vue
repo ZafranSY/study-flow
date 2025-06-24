@@ -65,21 +65,11 @@
               </select>
             </div>
             
-            <div>
-              <select v-model="statusFilter" class="input-field">
-                <option value="">All Status</option>
-                <option value="active">Active</option>
-                <option value="inactive">Inactive</option>
-                <option value="pending">Pending</option>
-              </select>
-            </div>
+            <!-- Removed Status Filter Dropdown -->
           </div>
           
           <div class="flex items-center space-x-3">
-            <button @click="exportUsers" class="btn-secondary">
-              <ArrowDownTrayIcon class="h-4 w-4 mr-2" />
-              Export
-            </button>
+            <!-- Removed Export Button -->
             <button @click="openAddUserModal" class="btn-primary">
               <PlusIcon class="h-4 w-4 mr-2" />
               Add User
@@ -102,15 +92,9 @@
                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Role
                 </th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Status
-                </th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Last Login
-                </th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Created
-                </th>
+                <!-- Removed Status Column Header -->
+                <!-- Removed Last Login Column Header -->
+                <!-- Removed Created Column Header -->
                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Actions
                 </th>
@@ -118,7 +102,8 @@
             </thead>
             <tbody class="bg-white divide-y divide-gray-200">
                <tr v-if="filteredUsers.length === 0">
-                <td colspan="7" class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-center">
+                 <!-- Colspan adjusted from 7 to 4 -->
+                <td colspan="4" class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-center">
                   No users found.
                 </td>
               </tr>
@@ -145,17 +130,9 @@
                     {{ user.role }}
                   </span>
                 </td>
-                <td class="px-6 py-4 whitespace-nowrap">
-                  <span :class="getStatusColor(user.status)" class="px-2 py-1 text-xs font-medium rounded-full">
-                    {{ user.status }}
-                  </span>
-                </td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  {{ user.last_login || 'Never' }}
-                </td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  {{ formatDate(user.created_at) }}
-                </td>
+                <!-- Removed Status Column Data -->
+                <!-- Removed Last Login Column Data -->
+                <!-- Removed Created Column Data -->
                 <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
                   <div class="flex items-center space-x-2">
                     <button 
@@ -164,18 +141,8 @@
                     >
                       Edit
                     </button>
-                    <button 
-                      @click="toggleUserStatus(user)"
-                      :class="user.status === 'active' ? 'text-red-600 hover:text-red-900' : 'text-green-600 hover:text-green-900'"
-                    >
-                      {{ user.status === 'active' ? 'Deactivate' : 'Activate' }}
-                    </button>
-                    <button 
-                      @click="resetPassword(user)"
-                      class="text-yellow-600 hover:text-yellow-900"
-                    >
-                      Reset Password
-                    </button>
+                    <!-- Removed Deactivate/Activate Button -->
+                    <!-- Removed Reset Password Button -->
                     <button 
                       @click="confirmDeleteUser(user.user_id)"
                       class="text-red-600 hover:text-red-900"
@@ -221,18 +188,7 @@
         </div>
       </div>
 
-      <div v-if="selectedUsers.length > 0" class="fixed bottom-4 left-1/2 transform -translate-x-1/2 bg-white rounded-lg shadow-lg border border-gray-200 p-4">
-        <div class="flex items-center space-x-4">
-          <span class="text-sm text-gray-600">{{ selectedUsers.length }} users selected</span>
-          <button @click="bulkActivate" class="btn-secondary text-sm">Activate</button>
-          <button @click="bulkDeactivate" class="btn-secondary text-sm">Deactivate</button>
-          <button @click="bulkDelete" class="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-sm">Delete</button>
-          <button @click="selectedUsers = []" class="text-gray-400 hover:text-gray-600">
-            <XMarkIcon class="h-5 w-5" />
-          </button>
-        </div>
-      </div>
-
+      <!-- Removed Bulk Action Bar -->
       <div v-if="showAddUserModal || showEditUserModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
         <div class="bg-white rounded-lg p-6 w-full max-w-2xl m-4 max-h-screen overflow-y-auto">
           <div class="flex justify-between items-center mb-6">
@@ -338,7 +294,7 @@ import {
   AcademicCapIcon,
   UserGroupIcon,
   ClockIcon,
-  ArrowDownTrayIcon,
+  // Removed ArrowDownTrayIcon as Export button is removed
   PlusIcon,
   XMarkIcon
 } from '@heroicons/vue/24/outline'
@@ -349,7 +305,8 @@ import StatsCard from '../components/shared/StatsCard.vue'
 // Reactive state variables
 const searchQuery = ref('')
 const roleFilter = ref('')
-const statusFilter = ref('') // Kept for UI, but backend doesn't seem to have 'status' directly
+// Removed statusFilter as the dropdown is removed
+// const statusFilter = ref('') 
 const selectedUsers = ref<string[]>([])
 const showAddUserModal = ref(false)
 const showEditUserModal = ref(false)
@@ -445,9 +402,11 @@ const fetchUsers = async () => {
 
     // Update stats based on fetched data if needed (example, adjust as per your backend's actual data)
     totalUsers.value = users.value.length;
-    activeStudents.value = users.value.filter(u => u.role === 'student' && u.status === 'active').length;
+    // Removed logic related to 'status' as column is removed, assuming users are active for stats
+    activeStudents.value = users.value.filter(u => u.role === 'student').length;
     facultyMembers.value = users.value.filter(u => u.role === 'lecturer' || u.role === 'advisor').length;
-    // pendingApprovals - Requires a backend field for 'pending' status users
+    // pendingApprovals - Requires a backend field for 'pending' status users or specific logic
+    pendingApprovals.value = 0; // Default to 0 or implement specific API for this stat
 
   } catch (error: any) {
     console.error('Error fetching users:', error);
@@ -583,7 +542,7 @@ const openEditUserModal = (user: any) => {
 const closeUserModal = () => {
   showAddUserModal.value = false;
   showEditUserModal.value = false;
-  resetUserForm(); // Reset form data after closing
+  resetUserForm(); 
 };
 
 const confirmDeleteUser = (id: string) => {
@@ -597,7 +556,7 @@ const cancelDelete = () => {
 };
 
 
-// --- Computed Properties and Utility Functions ---
+
 
 const filteredUsers = computed(() => {
   let filtered = users.value;
@@ -615,12 +574,7 @@ const filteredUsers = computed(() => {
     filtered = filtered.filter(user => user.role === roleFilter.value);
   }
   
-  // Note: Your backend data might not have a 'status' field or it might be different.
-  // Assuming 'status' is a property of the user object (e.g., 'active', 'inactive').
-  if (statusFilter.value) {
-    filtered = filtered.filter(user => user.status === statusFilter.value);
-  }
-  
+
   return filtered;
 });
 
@@ -634,18 +588,11 @@ const getRoleBadgeColor = (role: string) => {
   return colors[role] || 'bg-gray-100 text-gray-800';
 };
 
-const getStatusColor = (status: string) => {
-  const colors: { [key: string]: string } = {
-    active: 'bg-green-100 text-green-800',
-    inactive: 'bg-red-100 text-red-800',
-    pending: 'bg-yellow-100 text-yellow-800'
-  };
-  // Default to inactive if status is not explicitly handled or missing
-  return colors[status] || 'bg-red-100 text-red-800'; 
-};
+
 
 const formatDate = (dateString: string) => {
-  if (!dateString || dateString === 'Never') return 'N/A'; // Handle cases where date might be null or 'Never'
+
+  if (!dateString || dateString === 'Never') return 'N/A'; 
   try {
     return new Date(dateString).toLocaleDateString('en-US', {
       year: 'numeric',
@@ -667,105 +614,9 @@ const toggleSelectAll = (event: Event) => {
   }
 };
 
-// Placeholder functions for bulk actions and other actions not directly mapped to simple API calls yet
-const toggleUserStatus = (user: any) => {
-  // This would ideally be an API call to update user status
-  alert(`Functionality for toggling user status for ${user.username} is not yet implemented via API.`);
-  // For now, mimic UI change but it won't persist without API call
-  user.status = user.status === 'active' ? 'inactive' : 'active';
-};
 
-const resetPassword = (user: any) => {
-  alert(`Functionality for sending password reset email to ${user.username} is not yet implemented via API.`);
-};
-
-// This `deleteUser` is no longer directly used by the "Delete" button, 
-// which now calls `confirmDeleteUser` -> `deleteUserConfirm` (the API call).
-// Keeping it commented for reference or if it's used elsewhere.
-// const deleteUser = (user: any) => {
-//   if (confirm(`Are you sure you want to delete ${user.full_name}?`)) {
-//     // This would directly call the API if no confirmation modal was desired
-//     console.log('Direct delete for user:', user.user_id);
-//   }
-// };
-
-
-const bulkActivate = () => {
-  if (selectedUsers.value.length === 0) {
-    alert('No users selected for bulk activation.');
-    return;
-  }
-  // This would typically involve a single API call to bulk update statuses
-  alert(`Activating ${selectedUsers.value.length} users. (API integration pending)`);
-  // Clear selection after action
-  selectedUsers.value.forEach(userId => {
-    const user = users.value.find(u => u.user_id.toString() === userId);
-    if (user) user.status = 'active'; // Mimic UI update
-  });
-  selectedUsers.value = [];
-};
-
-const bulkDeactivate = () => {
-  if (selectedUsers.value.length === 0) {
-    alert('No users selected for bulk deactivation.');
-    return;
-  }
-  // This would typically involve a single API call to bulk update statuses
-  alert(`Deactivating ${selectedUsers.value.length} users. (API integration pending)`);
-  // Clear selection after action
-  selectedUsers.value.forEach(userId => {
-    const user = users.value.find(u => u.user_id.toString() === userId);
-    if (user) user.status = 'inactive'; // Mimic UI update
-  });
-  selectedUsers.value = [];
-};
-
-const bulkDelete = () => {
-  if (selectedUsers.value.length === 0) {
-    alert('No users selected for bulk deletion.');
-    return;
-  }
-  if (confirm(`Are you sure you want to delete ${selectedUsers.value.length} selected users? This action cannot be undone.`)) {
-    // This would typically involve a single API call to bulk delete users
-    alert(`Deleting ${selectedUsers.value.length} users. (API integration pending)`);
-    // Filter out deleted users from the local array (mimic API)
-    users.value = users.value.filter(user => !selectedUsers.value.includes(user.user_id.toString()));
-    selectedUsers.value = [];
-  }
-};
-
-const exportUsers = () => {
-  alert('Exporting users... (Functionality not implemented via API)');
-};
-
-// Lifecycle hook to fetch users on component mount
 onMounted(() => {
   fetchUsers();
 });
 </script>
 
-<style>
-/* You mentioned not changing the UI, so these styles are kept as they were. */
-/* Ensure your main app's CSS or Tailwind setup includes these. */
-.card {
-  @apply bg-white p-6 rounded-lg shadow-md;
-}
-.input-field {
-  @apply mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm;
-}
-.btn-primary {
-  @apply inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500;
-}
-.btn-secondary {
-  @apply inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500;
-}
-/* Added btn-danger based on previous discussions for delete button */
-.btn-danger {
-  @apply inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500;
-}
-
-/* Modal overlay style (if not provided by a global CSS file) */
-.modal-overlay {
-  background-color: rgba(0, 0, 0, 0.5); /* Semi-transparent background */
-}
-</style>
