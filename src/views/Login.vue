@@ -80,48 +80,56 @@
 <script setup lang="ts">
 import { ref, reactive } from 'vue'
 import { useRouter } from 'vue-router'
-import { useAuthStore } from '../stores/auth'
 
 const router = useRouter()
-const authStore = useAuthStore()
 
 const loading = ref(false)
-const error = ref('')
+const error   = ref('')
 
 const loginForm = reactive({
   identifier: '',
-  password: ''
+  password:  ''
 })
 
 const handleLogin = async () => {
   loading.value = true
-  error.value = ''
+  error.value   = ''
 
   try {
-    const result = await authStore.login(loginForm.identifier, loginForm.password)
-    
-    if (result.success) {
-      // Redirect based on user role
-      const role = authStore.currentUser?.role
-      switch (role) {
-        case 'student':
-          router.push('/student')
-          break
-        case 'lecturer':
-          router.push('/lecturer')
-          break
-        case 'advisor':
-          router.push('/advisor')
-          break
-        case 'admin':
-          router.push('/admin')
-          break
-        default:
-          router.push('/login')
-      }
-    } else {
-      error.value = result.error || 'Login failed'
+    const response = await fetch('http://localhost:8219/login', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({
+        username: loginForm.identifier,
+        password: loginForm.password
+      })
+    })
+
+    const data = await response.json()
+
+    if (!response.ok) {
+      // 400 or 401 from API
+      error.value = data.error || 'Login failed'
+      return
     }
+
+    // Success → we have { token: "..." }
+    const token = data.token
+
+    // Decode JWT payload to read role
+    const payloadPart   = token.split('.')[1]
+    const decodedJson   = JSON.parse(atob(payloadPart))
+    const userRole: string = decodedJson.role
+
+    // Redirect by role
+    switch (userRole) {
+      case 'student':  router.push('/student');  break
+      case 'lecturer': router.push('/lecturer'); break
+      case 'advisor':  router.push('/advisor');  break
+      case 'admin':    router.push('/admin');    break
+      default:         router.push('/login')
+    }
+
   } catch (err) {
     error.value = 'An error occurred during login'
   } finally {
