@@ -81,59 +81,95 @@
 import { ref, reactive } from 'vue'
 import { useRouter } from 'vue-router'
 
+// Initialize the router for navigation
 const router = useRouter()
 
+// Reactive state variables for loading status and error messages
 const loading = ref(false)
 const error   = ref('')
 
+// Reactive form data for login
 const loginForm = reactive({
-  identifier: '',
-  password:  ''
+  identifier: '', // This will map to 'username' in the API
+  password:   ''
 })
 
+/**
+ * Handles the login process:
+ * 1. Sends login credentials to the backend API.
+ * 2. Processes the API response, handling success and error states.
+ * 3. Stores the JWT token and user information in session storage upon successful login.
+ * 4. Redirects the user based on their role.
+ */
 const handleLogin = async () => {
+  // Set loading state to true and clear previous errors
   loading.value = true
   error.value   = ''
 
   try {
+    // Make the API call to the login endpoint
     const response = await fetch('http://localhost:8219/login', {
-      method:  'POST',
+      method:   'POST',
       headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({
-        username: loginForm.identifier,
+      body:     JSON.stringify({
+        username: loginForm.identifier, // Map front-end 'identifier' to back-end 'username'
         password: loginForm.password
       })
     })
 
+    // Parse the JSON response body
     const data = await response.json()
 
+    // Check if the response was not OK (e.g., 400, 401 status codes)
     if (!response.ok) {
-      // 400 or 401 from API
+      // Set the error message from the API response or a generic message
       error.value = data.error || 'Login failed'
-      return
+      return // Stop further execution on error
     }
 
-    // Success → we have { token: "..." }
+    // --- Successful Login ---
+    // Extract the token and user object from the successful response
     const token = data.token
+    const user = data.user // The new user object returned by the API
 
-    // Decode JWT payload to read role
+    // Store JWT in session storage for authentication on subsequent requests
+    sessionStorage.setItem('token', token)
+    // Store the entire user object in session storage (stringified, as sessionStorage only stores strings)
+    sessionStorage.setItem('user', JSON.stringify(user))
+
+    // Determine the user's role for redirection
+    // Prefer using the role directly from the 'user' object if available
+    const userRole: string = user?.role || '' // Safely get role from the user object
+
+    // If for some reason the 'user' object wasn't available or 'role' was missing,
+    // you could fall back to decoding the JWT, but using the direct 'user' object is simpler and clearer.
+    // If you need specific JWT payload details beyond the 'user' object:
+    /*
     const payloadPart   = token.split('.')[1]
     const decodedJson   = JSON.parse(atob(payloadPart))
-    const userRole: string = decodedJson.role
+    const userRoleFromJwt: string = decodedJson.role
+    */
 
-    // Redirect by role
+    // Redirect the user based on their assigned role
     switch (userRole) {
-      case 'student':  router.push('/student');  break
+      case 'student':   router.push('/student');   break
       case 'lecturer': router.push('/lecturer'); break
-      case 'advisor':  router.push('/advisor');  break
-      case 'admin':    router.push('/admin');    break
-      default:         router.push('/login')
+      case 'advisor':   router.push('/advisor');   break
+      case 'admin':     router.push('/admin');     break
+      default:          router.push('/login') // Default fallback for unknown roles
     }
-
+    
   } catch (err) {
-    error.value = 'An error occurred during login'
+    // Catch any network errors or unexpected issues during the fetch operation
+    console.error('Login error:', err) // Log the full error for debugging
+    error.value = 'An error occurred during login. Please try again.'
   } finally {
+    // Always set loading state back to false after the operation completes
     loading.value = false
   }
 }
+// You might want to export handleLogin or the loginForm for use in your Vue component
+// For example:
+// export { handleLogin, loginForm, loading, error }
+
 </script>
