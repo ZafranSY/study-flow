@@ -131,12 +131,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue';
-import { XMarkIcon, CameraIcon } from '@heroicons/vue/24/outline';
+import { ref, onMounted } from 'vue';
+import { XMarkIcon,  } from '@heroicons/vue/24/outline';
 import Navigation from '../components/shared/Navigation.vue';
-import { useAuthStore } from '../stores/auth'; // Keeping this if it's used elsewhere
 
-const authStore = useAuthStore();
 const showImageUpload = ref(false);
 const twoFactorEnabled = ref(false); // Can be set dynamically if 2FA status is in user data
 
