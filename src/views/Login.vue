@@ -140,7 +140,6 @@ const handleLogin = async () => {
     // Determine the user's role for redirection
     // Prefer using the role directly from the 'user' object if available
     const userRole: string = user?.role || '' // Safely get role from the user object
-
     // If for some reason the 'user' object wasn't available or 'role' was missing,
     // you could fall back to decoding the JWT, but using the direct 'user' object is simpler and clearer.
     // If you need specific JWT payload details beyond the 'user' object:
