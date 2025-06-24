@@ -11,44 +11,18 @@
         <p class="text-gray-600">Track your academic progress and performance</p>
       </div>
 
-      <!-- Stats Overview -->
-      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        <StatsCard
-          title="Overall GPA"
-          :value="overallGPA.toFixed(2)"
-          change="+0.2 from last semester"
-          :icon="AcademicCapIcon"
-          variant="primary"
-        />
-        <StatsCard
-          title="Completed Assessments"
-          :value="`${completedAssessments}/${totalAssessments}`"
-          :icon="DocumentCheckIcon"
-          variant="success"
-        />
-        <StatsCard
-          title="Class Rank"
-          :value="`#${classRank} of ${totalStudents}`"
-          change="↑ 2 positions"
-          :icon="TrophyIcon"
-          variant="warning"
-        />
-        <StatsCard
-          title="Upcoming Deadlines"
-          :value="upcomingDeadlines"
-          :icon="ClockIcon"
-          variant="danger"
-        />
-      </div>
+     
 
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <!-- Performance Chart -->
         <div class="lg:col-span-2">
-          <PerformanceChart
+          <!-- <PerformanceChart
             title="Performance Trend"
             :data="performanceData"
             color="#3b82f6"
-          />
+          /> -->
+              <StudentPerformanceChart :data="studentData" />
+
         </div>
 
         <!-- Quick Actions -->
@@ -106,9 +80,10 @@
             <h3 class="text-lg font-semibold text-gray-900">Grade Details</h3>
             <select v-model="selectedCourse" class="text-sm border-gray-300 rounded-lg focus:ring-primary-500 focus:border-primary-500">
               <option value="">All Courses</option>
-              <option value="CS101">CS101 - Programming Fundamentals</option>
-              <option value="CS201">CS201 - Data Structures</option>
-              <option value="MATH101">MATH101 - Calculus I</option>
+  <option v-for="grade in filteredGrades" :key="grade.id" :value="grade.id">
+
+              {{ grade.courseId }}
+  </option>
             </select>
           </div>
           
@@ -134,9 +109,10 @@
                 </tr>
               </thead>
               <tbody class="bg-white divide-y divide-gray-200">
-                <tr v-for="grade in filteredGrades" :key="grade.id" class="table-row">
+                 <tr v-for="grade in filteredGrades" :key="grade.id" class="table-row">
                   <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                    {{ getAssessmentTitle(grade.assessmentId) }}
+                   {{ grade.component_name }}
+
                   </td>
                   <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     {{ grade.courseId }}
@@ -158,41 +134,12 @@
           </div>
         </div>
 
-        <!-- Peer Comparison -->
+       <!-- Peer Comparison -->
         <div v-if="activeTab === 'compare'" class="card">
           <h3 class="text-lg font-semibold text-gray-900 mb-4">Performance Comparison</h3>
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <h4 class="text-md font-medium text-gray-700 mb-3">Class Average vs Your Performance</h4>
-              <div class="space-y-3">
-                <div v-for="course in courses" :key="course" class="flex items-center justify-between">
-                  <span class="text-sm text-gray-600">{{ course }}</span>
-                  <div class="flex items-center space-x-2">
-                    <div class="w-24 bg-gray-200 rounded-full h-2">
-                      <div 
-                        class="bg-primary-500 h-2 rounded-full" 
-                        :style="{ width: getYourPerformance(course) + '%' }"
-                      ></div>
-                    </div>
-                    <span class="text-sm font-medium text-gray-900">
-                      {{ getYourPerformance(course).toFixed(0) }}%
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
-            
-            <div>
-              <h4 class="text-md font-medium text-gray-700 mb-3">Your Percentile Ranking</h4>
-              <div class="text-center">
-                <div class="text-3xl font-bold text-primary-600">78th</div>
-                <p class="text-sm text-gray-600">Percentile</p>
-                <p class="text-xs text-gray-500 mt-2">
-                  You're performing better than 78% of your classmates
-                </p>
-              </div>
-            </div>
-          </div>
+          <PeerComparisonChart 
+            :current-student-id="authStore.currentUser?.id.toString() || ''"
+          />
         </div>
 
         <!-- What-If Tool -->
@@ -302,7 +249,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, reactive } from 'vue'
+import { ref, computed, reactive , onMounted } from 'vue'
 import { 
   AcademicCapIcon, 
   DocumentCheckIcon, 
@@ -314,9 +261,11 @@ import {
   ExclamationTriangleIcon
 } from '@heroicons/vue/24/outline'
 
-import Navigation from '../components/shared/Navigation.vue'
+import  Navigation  from '../components/shared/Navigation.vue'
 import StatsCard from '../components/shared/StatsCard.vue'
-import PerformanceChart from '../components/charts/PerformanceChart.vue'
+import StudentPerformanceChart from '../components/charts/StudentPerformanceChart.vue'
+import PeerComparisonChart from '../components/charts/PeerComparisonChart.vue';  // Import the component
+
 import { useAuthStore } from '../stores/auth'
 import { useGradesStore } from '../stores/grades'
 
@@ -347,20 +296,65 @@ const totalStudents = ref(150)
 const upcomingDeadlines = ref(3)
 const courses = ['CS101', 'CS201', 'MATH101']
 
-const performanceData = computed(() => ({
-  labels: ['Week 1', 'Week 2', 'Week 3', 'Week 4', 'Week 5', 'Week 6'],
-  values: [75, 82, 78, 85, 88, 92]
-}))
-
-const studentGrades = computed(() => {
-  if (!authStore.currentUser) return []
-  return gradesStore.getStudentGrades(authStore.currentUser.id)
+const studentData = ref({
+  labels: [] as string[],  // Should hold the dates or assessment names
+  values: [] as number[]   // Should hold the corresponding marks
 })
+const studentDetails = ref<Array<{
+  id: number;
+  assessmentId: number;
+  courseId: string;
+  marks: number;
+  totalMarks: number;
+  recordedAt: string;
+}>>([]);
+const fetchStudentData = async () => {
+  try {
+    const response = await fetch('http://localhost:8219/student-marks', {
+      headers: {
+        'Authorization': `Bearer ${sessionStorage.getItem('token')}` // Replace with your token storage
+      }
+    })
+    const data = await response.json()
+    // Check if data is an array before calling .map()
+        console.log('Fetched data:', data);  // Add this to check the data
+
+    if (Array.isArray(data)) {
+      studentData.value.labels = data.map((item: any) => item.recorded_at); // Assuming 'recorded_at' is the date field
+      studentData.value.values = data.map((item: any) => parseFloat(item.mark_obtained)); // Convert 'mark_obtained' to a number
+
+        studentDetails.value = data.map((item: any) => ({
+        id: item.mark_id,
+        assessmentId: item.component_id,
+        courseId: item.course_name,
+        marks: parseFloat(item.mark_obtained),
+        totalMarks: 100, // Adjust as per your logic
+        recordedAt: item.recorded_at,
+          component_name: item.component_name // Ensure this is added
+
+      }))
+    } else {
+      console.error('Data is not an array:', data)
+    }
+  } catch (error) {
+    console.error('Error fetching student data:', error)
+  }
+}
+
+onMounted(() => {
+  fetchStudentData()
+})
+
+// const studentGrades = computed(() => {
+//   if (!authStore.currentUser) return []
+//   return gradesStore.getStudentGrades(authStore.currentUser.id)
+// })
 
 const filteredGrades = computed(() => {
-  if (!selectedCourse.value) return studentGrades.value
-  return studentGrades.value.filter(grade => grade.courseId === selectedCourse.value)
+  if (!selectedCourse.value) return studentDetails.value
+  return studentDetails.value.filter((grade: any) => grade.courseId === selectedCourse.value)
 })
+
 
 const getAssessmentTitle = (assessmentId: string) => {
   const assessment = gradesStore.assessments.find(a => a.id === assessmentId)

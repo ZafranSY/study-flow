@@ -152,6 +152,8 @@ const handleLogout = () => {
     // Redirect to login page
     router.push('/login');
 }
+
+
 </script>
 
 <style scoped>
