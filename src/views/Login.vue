@@ -15,18 +15,18 @@
                 <div class="space-y-4">
                     <div>
                         <label for="identifier" class="block text-sm font-medium text-gray-700">
-                            Email or Matric Number
+                            Username
                         </label>
                         <input id="identifier" v-model="loginForm.identifier" type="text" required class="input-field"
-                            placeholder="Enter your email or matric number">
+                            placeholder="Enter your username">
                     </div>
 
                     <div>
                         <label for="password" class="block text-sm font-medium text-gray-700">
-                            Password
+                            Password/PIN
                         </label>
                         <input id="password" v-model="loginForm.password" type="password" required class="input-field"
-                            placeholder="Enter your password">
+                            placeholder="Enter your password/PIN">
                     </div>
                 </div>
 
@@ -108,6 +108,7 @@ const handleLogin = async () => {
         sessionStorage.setItem('token', token)
         sessionStorage.setItem('user', JSON.stringify(user))
         const userRole: string = user?.role || '' 
+        console.log(userRole)
         switch (userRole) {
             case 'student': router.push('/student'); break
             case 'lecturer': router.push('/lecturer'); break

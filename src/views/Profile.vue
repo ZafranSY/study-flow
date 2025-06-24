@@ -108,7 +108,7 @@
                     </div>
 
                     <div class="space-y-4">
-                        <div class="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
+                        <!-- <div class="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
                             <CameraIcon class="mx-auto h-12 w-12 text-gray-400" />
                             <div class="mt-2">
                                 <label class="cursor-pointer">
@@ -117,7 +117,7 @@
                                 </label>
                                 <p class="text-xs text-gray-500 mt-1">PNG, JPG, GIF up to 10MB</p>
                             </div>
-                        </div>
+                        </div> -->
 
                         <div class="flex justify-end space-x-3">
                             <button @click="showImageUpload = false" class="btn-secondary">Cancel</button>
