@@ -9,6 +9,7 @@ import AdminDashboard from '../views/AdminDashboard.vue'
 import UserManagement from '../views/UserManagement.vue'
 import Reports from '../views/Reports.vue'
 import Profile from '../views/Profile.vue'
+import LecturerMark from '../views/LecturerMark.vue' // <--- ADD THIS IMPORT
 
 const router = createRouter({
     history: createWebHistory(),
@@ -44,6 +45,13 @@ const router = createRouter({
             path: '/lecturer',
             name: 'LecturerDashboard',
             component: LecturerDashboard,
+            meta: { requiresAuth: true, role: 'lecturer' }
+        },
+        
+        {
+            path: '/lecturer/marks',
+            name: 'LecturerMarkManagement', 
+            component: LecturerMark,
             meta: { requiresAuth: true, role: 'lecturer' }
         },
         {

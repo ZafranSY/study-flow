@@ -29,9 +29,9 @@
                             <a href="#" class="nav-link">
                                 Courses
                             </a>
-                            <a href="#" class="nav-link">
-                                Students
-                            </a>
+                            <router-link to="/lecturer/marks" class="nav-link">
+                                Grades
+                            </router-link>
                             <a href="#" class="nav-link">
                                 Analytics
                             </a>
