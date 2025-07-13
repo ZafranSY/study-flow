@@ -57,43 +57,51 @@ export const useGradesStore = defineStore('grades', () => {
   /**
    * Fetches all necessary data (grades, assessments) for the logged-in student.
    */
-  async function fetchStudentData() {
-    isLoading.value = true;
-    const token = sessionStorage.getItem('token');
+async function fetchStudentData() {
+  isLoading.value = true;
+  const token = sessionStorage.getItem('token');
 
-    if (!token) {
-      console.error('No authentication token found.');
-      isLoading.value = false;
-      return;
-    }
-
-    try {
-      const headers = {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      };
-
-      // Fetch grades and assessments in parallel using existing backend endpoints.
-      // The backend will automatically filter by the student's token.
-      const [gradesResponse, assessmentsResponse] = await Promise.all([
-        fetch(`${API_BASE_URL}/student-marks`, { headers }),
-        fetch(`${API_BASE_URL}/assessment-components`, { headers })
-      ]);
-
-      if (!gradesResponse.ok || !assessmentsResponse.ok) {
-        throw new Error('Failed to fetch data from the server.');
-      }
-
-      // Update the store's state with data from the API
-      grades.value = await gradesResponse.json();
-      assessments.value = await assessmentsResponse.json();
-
-    } catch (error) {
-      console.error('Error fetching student data:', error);
-    } finally {
-      isLoading.value = false;
-    }
+  if (!token) {
+    console.error('No authentication token found.');
+    isLoading.value = false;
+    return;
   }
+
+  try {
+    const headers = {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`
+    };
+
+    // Fetch grades and assessments in parallel using existing backend endpoints
+    const [gradesResponse, assessmentsResponse] = await Promise.all([
+      fetch(`${API_BASE_URL}/student-marks`, { headers }),
+      fetch(`${API_BASE_URL}/assessment-components`, { headers })
+    ]);
+
+    // Check if either of the responses is not OK
+    if (!gradesResponse.ok) {
+      throw new Error(`Failed to fetch grades: ${gradesResponse.statusText}`);
+    }
+    if (!assessmentsResponse.ok) {
+      throw new Error(`Failed to fetch assessments: ${assessmentsResponse.statusText}`);
+    }
+
+    // Update the store's state with data from the API
+    grades.value = await gradesResponse.json();
+    assessments.value = await assessmentsResponse.json();
+
+    // Optionally return the data (if other logic needs to handle it)
+    return { grades: grades.value, assessments: assessments.value };
+
+  } catch (error) {
+    console.error('Error fetching student data:', error);
+    // Optionally handle specific errors like 401 or 500
+  } finally {
+    isLoading.value = false;
+  }
+}
+
 
   // --- GETTERS (Functions to process the data) ---
 

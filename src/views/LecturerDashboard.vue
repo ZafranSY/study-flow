@@ -32,7 +32,7 @@
         <StatsCard
           title="Class Average"
           :value="`${classAverage.toFixed(1)}%`"
-          change="+2.3% from last month"
+          change=" "   
           :icon="ChartBarIcon"
           variant="success"
         />
@@ -86,7 +86,7 @@
             >
               <div class="flex items-center space-x-3">
                 <ArrowUpTrayIcon class="h-5 w-5 text-gray-400" />
-                <span class="text-sm font-medium">Bulk Upload CSV</span>
+                <span class="text-sm font-medium">Export CSV</span>
               </div>
             </button>
           </div>
@@ -124,20 +124,20 @@
               <tbody class="bg-white divide-y divide-gray-200">
                 <tr v-for="student in students" :key="student.username" class="table-row">
                   <td class="px-6 py-4 whitespace-nowrap">
-                    <div class="flex items-center">
-                      <img :src="student.profile_picture" alt="" class="h-8 w-8 rounded-full">
-                      <div class="ml-3">
-                        <div class="text-sm font-medium text-gray-900">{{ student.full_name }}</div>
-                      </div>
-                    </div>
-                  </td>
-                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ student.matric_number || 'N/A' }}</td>
-                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">CS101</td>
-                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ student.current_grade || 0 }}%</td>
-                  <td class="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
-                    <button class="text-primary-600 hover:text-primary-900">Edit</button>
-                    <button class="text-secondary-600 hover:text-secondary-900">View Details</button>
-                  </td>
+            <div class="flex items-center">
+              <img :src="student.profile_picture || 'default-profile.png'" alt="" class="h-8 w-8 rounded-full">
+              <div class="ml-3">
+                <div class="text-sm font-medium text-gray-900">{{ student.full_name }}</div>
+              </div>
+            </div>
+          </td>
+          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ student.matric_number || 'N/A' }}</td>
+          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">CS101</td>
+          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ student.current_grade || 0 }}%</td>
+          <td class="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
+            <button class="text-primary-600 hover:text-primary-900">Edit</button>
+            <button class="text-secondary-600 hover:text-secondary-900">View Details</button>
+          </td>
                 </tr>
               </tbody>
             </table>
@@ -172,7 +172,7 @@
         </div>
 
         <div v-if="activeTab === 'upload'" class="card">
-          <h3 class="text-lg font-semibold text-gray-900 mb-6">Bulk Upload Grades</h3>
+          <h3 class="text-lg font-semibold text-gray-900 mb-6">Export Grades</h3>
           </div>
       </div>
     </div>
@@ -202,6 +202,7 @@ interface User {
   id: string;
   username: string;
   name: string;
+  user_id:String;
 }
 
 const gradesStore = useGradesStore();
@@ -211,6 +212,7 @@ const selectedCourse = ref('');
 
 // This ref will hold the student data we fetch from the API
 const students = ref<any[]>([]); 
+const isLoading = ref(false);  // Declare isLoading
 
 // All reactive variables needed by the template
 const uploadedFile = ref<File | null>(null);
@@ -228,8 +230,91 @@ const classPerformanceData = { // Mock data for the chart
   labels: ['Quiz 1', 'Quiz 2', 'Assignment 1', 'Midterm', 'Assignment 2', 'Quiz 3'],
   values: [75, 78, 82, 76, 85, 79]
 };
+// const API_BASE_URL = process.env.VUE_APP_API_BASE_URL || 'http://localhost:8219';
+// console.log(process.env.VUE_APP_API_BASE_URL); // Should print the value or 'http://localhost:8219'
 
 // Fetch data when the component loads
+// onMounted(() => {
+//   const userString = sessionStorage.getItem('user');
+//   if (userString) {
+//     try {
+//       currentUser.value = JSON.parse(userString);
+//       if (currentUser.value?.username) {
+//         fetchLecturerStudents();  // Fetch students based on the username
+//       }
+//     } catch (e) {
+//       console.error('Could not parse user from sessionStorage', e);
+//     }
+//   }
+// });
+
+// Method to call the store and populate local data
+// async function fetchLecturerStudents() {
+//   const token = sessionStorage.getItem('token');
+
+//   if (!token) {
+//     console.error('No authentication token found.');
+//     return;
+//   }
+
+//   try {
+//     const headers = {
+//       'Content-Type': 'application/json',
+//       'Authorization': `Bearer ${token}`
+//     };
+
+//     // Assuming the endpoint is '/lecturer/{id}/students' and you fetch students based on the lecturer ID
+//     // Replace `{lecturerId}` with actual lecturer ID or username
+//     const lecturerId = currentUser.value?.user_id; // or use another identifier for the lecturer
+// // Correct the URL here to match your backend API endpoint
+// const response = await fetch(`${API_BASE_URL}/users/lecturer/${currentUser.value?.username}/students`, { headers });
+
+//     if (!response.ok) {
+//       throw new Error(`Failed to fetch lecturer students: ${response.statusText}`);
+//     }
+
+//     const studentsData = await response.json();
+//     students.value = studentsData.students;  // Populate the students list
+
+//   } catch (error) {
+//     console.error('Error fetching lecturer students:', error);
+//   } 
+// }
+async function fetchLecturerStudents() {
+  const token = sessionStorage.getItem('token');
+
+  if (!token) {
+    console.error('No authentication token found.');
+    return;
+  }
+
+  try {
+    isLoading.value = true;  // Start loading
+
+    const headers = {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`
+    };
+
+    const response = await fetch(`${"http://localhost:8219"}/users/lecturer/${currentUser.value?.username}/students`, { headers });
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch lecturer students: ${response.statusText}`);
+    }
+   if (!response.ok) {
+        throw new Error(`Failed to fetch lecturer students: ${response.statusText}`);
+    }
+    const studentsData = await response.json();
+    students.value = studentsData.students;  // Populate students
+
+  } catch (error) {
+    console.error('Error fetching lecturer students:', error);
+  } finally {
+    isLoading.value = false;  // Stop loading
+  }
+}
+
+// Call fetchLecturerStudents when component loads
 onMounted(() => {
   const userString = sessionStorage.getItem('user');
   if (userString) {
@@ -243,16 +328,6 @@ onMounted(() => {
     }
   }
 });
-
-// Method to call the store and populate local data
-async function fetchLecturerStudents() {
-  if (!currentUser.value) return;
-  const fetchedData = await gradesStore.fetchLecturerData(currentUser.value.username);
-  if (fetchedData) {
-    students.value = fetchedData;
-  }
-}
-
 // Placeholder methods for template functions
 const createAssessment = () => {
   alert('Create Assessment logic goes here.');
