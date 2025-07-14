@@ -1,107 +1,107 @@
 <template>
-  <div class="card">
+  <div class="card p-6">
     <h3 class="text-lg font-semibold text-gray-900 mb-4">{{ title }}</h3>
-    <div class="h-64">
-      <Line
-        :data="chartData"
-        :options="chartOptions"
-        :key="chartKey"
-      />
+    <div v-if="chartData.labels.length > 0 && chartData.values.length > 0">
+      <canvas ref="chartCanvas"></canvas>
+    </div>
+    <div v-else class="text-center py-8 text-gray-500">
+      <p>No performance data available.</p>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
-import {
-  Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  Title,
-  Tooltip,
-  Legend,
-  Filler
-} from 'chart.js'
-import { Line } from 'vue-chartjs'
+import { ref, onMounted, watch, onBeforeUnmount } from 'vue';
+import { Chart, registerables } from 'chart.js';
 
-ChartJS.register(
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  Title,
-  Tooltip,
-  Legend,
-  Filler
-)
+// Register all Chart.js components
+Chart.register(...registerables);
 
-interface Props {
-  title: string
+const props = defineProps<{
+  title: string;
   data: {
-    labels: string[]
-    values: number[]
+    labels: string[];
+    values: number[];
+  };
+  color: string;
+}>();
+
+const chartCanvas = ref<HTMLCanvasElement | null>(null);
+let myChart: Chart | null = null;
+
+const chartData = ref({
+  labels: props.data.labels || [],
+  values: props.data.values || []
+});
+
+const createChart = () => {
+  if (myChart) {
+    myChart.destroy(); // Destroy existing chart instance before creating a new one
   }
-  color?: string
-}
 
-const props = withDefaults(defineProps<Props>(), {
-  color: '#3b82f6'
-})
-
-const chartKey = ref(0)
-
-const chartData = computed(() => ({
-  labels: props.data.labels,
-  datasets: [
-    {
-      label: 'Performance',
-      data: props.data.values,
-      borderColor: props.color,
-      backgroundColor: props.color + '20',
-      fill: true,
-      tension: 0.4,
-      pointRadius: 4,
-      pointHoverRadius: 6,
-    }
-  ]
-}))
-
-const chartOptions = computed(() => ({
-  responsive: true,
-  maintainAspectRatio: false,
-  plugins: {
-    legend: {
-      display: false
-    },
-    tooltip: {
-      mode: 'index' as const,
-      intersect: false,
-    }
-  },
-  scales: {
-    y: {
-      beginAtZero: true,
-      max: 100,
-      grid: {
-        color: '#f3f4f6'
-      },
-      ticks: {
-        callback: function(value: any) {
-          return value + '%'
+  if (chartCanvas.value && chartData.value.labels.length > 0 && chartData.value.values.length > 0) {
+    const ctx = chartCanvas.value.getContext('2d');
+    if (ctx) {
+      myChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: chartData.value.labels,
+          datasets: [{
+            label: 'Performance',
+            data: chartData.value.values,
+            borderColor: props.color,
+            backgroundColor: `${props.color}40`, // Add some transparency
+            tension: 0.3,
+            fill: true,
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            y: {
+              beginAtZero: true,
+              max: 100 // Assuming grades are out of 100
+            }
+          },
+          plugins: {
+            legend: {
+              display: false // Hide legend if only one dataset
+            }
+          }
         }
-      }
-    },
-    x: {
-      grid: {
-        color: '#f3f4f6'
-      }
+      });
     }
-  },
-  interaction: {
-    intersect: false,
-    mode: 'index' as const,
   }
-}))
+};
+
+onMounted(() => {
+  createChart();
+});
+
+// Watch for changes in the data prop and re-render the chart
+watch(() => props.data, (newData) => {
+  chartData.value.labels = newData.labels || [];
+  chartData.value.values = newData.values || [];
+  if (myChart) {
+    myChart.data.labels = chartData.value.labels;
+    myChart.data.datasets[0].data = chartData.value.values;
+    myChart.update();
+  } else {
+    createChart(); // Recreate if chart was not initialized
+  }
+}, { deep: true }); // Deep watch for nested changes in data object
+
+onBeforeUnmount(() => {
+  if (myChart) {
+    myChart.destroy(); // Clean up chart instance
+  }
+});
 </script>
+
+<style scoped>
+/* Add any component-specific styles here if needed */
+.card {
+  @apply bg-white shadow overflow-hidden sm:rounded-lg p-6;
+}
+</style>

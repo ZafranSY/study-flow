@@ -32,7 +32,7 @@
         <StatsCard
           title="Class Average"
           :value="`${classAverage.toFixed(1)}%`"
-          change=" "   
+          change=" "  
           :icon="ChartBarIcon"
           variant="success"
         />
@@ -40,11 +40,16 @@
 
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div class="lg:col-span-2">
+          <!-- Safeguard for PerformanceChart to prevent "reading '6'" error -->
           <PerformanceChart
+            v-if="classPerformanceData.labels.length > 0 && classPerformanceData.values.length > 0"
             title="Class Performance Analytics"
             :data="classPerformanceData"
             color="#10b981"
           />
+          <div v-else class="card p-6 text-center text-gray-500">
+            <p>Loading performance chart data or no data available.</p>
+          </div>
         </div>
 
         <div class="card">
@@ -109,7 +114,10 @@
             </div>
           </div>
           
-          <div v-if="gradesStore.isLoading"><p>Loading students...</p></div>
+          <div v-if="isLoading"><p>Loading students...</p></div>
+          <div v-else-if="students.length === 0" class="text-center py-8 text-gray-500">
+            <p>No students found for this lecturer.</p>
+          </div>
           <div v-else class="overflow-x-auto">
             <table class="min-w-full divide-y divide-gray-200">
               <thead class="bg-gray-50">
@@ -122,22 +130,24 @@
                 </tr>
               </thead>
               <tbody class="bg-white divide-y divide-gray-200">
-                <tr v-for="student in students" :key="student.username" class="table-row">
+                <tr v-for="student in students" :key="student.user_id" class="table-row">
                   <td class="px-6 py-4 whitespace-nowrap">
-            <div class="flex items-center">
-              <img :src="student.profile_picture || 'default-profile.png'" alt="" class="h-8 w-8 rounded-full">
-              <div class="ml-3">
-                <div class="text-sm font-medium text-gray-900">{{ student.full_name }}</div>
-              </div>
-            </div>
-          </td>
-          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ student.matric_number || 'N/A' }}</td>
-          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">CS101</td>
-          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ student.current_grade || 0 }}%</td>
-          <td class="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
-            <button class="text-primary-600 hover:text-primary-900">Edit</button>
-            <button class="text-secondary-600 hover:text-secondary-900">View Details</button>
-          </td>
+                    <div class="flex items-center">
+                      <img :src="student.profile_picture || 'https://placehold.co/32x32/E0E0E0/888888?text=DP'" alt="Profile" class="h-8 w-8 rounded-full">
+                      <div class="ml-3">
+                        <div class="text-sm font-medium text-gray-900">{{ student.full_name }}</div>
+                      </div>
+                    </div>
+                  </td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ student.matric_number || 'N/A' }}</td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ student.course_code || 'N/A' }}</td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    {{ studentGrades[student.user_id] !== undefined ? studentGrades[student.user_id] : 'Loading...' }}%
+                  </td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
+                    <button class="text-primary-600 hover:text-primary-900">Edit</button>
+                    <button class="text-secondary-600 hover:text-secondary-900">View Details</button>
+                  </td>
                 </tr>
               </tbody>
             </table>
@@ -162,18 +172,18 @@
           </div>
           <div v-if="gradeForm.courseId && gradeForm.assessmentId" class="space-y-4">
             <h4 class="font-medium text-gray-700">Student Grades:</h4>
-            </div>
+          </div>
         </div>
 
         <div v-if="activeTab === 'assessments'" class="card">
           <h3 class="text-lg font-semibold text-gray-900 mb-6">Create New Assessment</h3>
           <form @submit.prevent="createAssessment" class="space-y-6">
-            </form>
+          </form>
         </div>
 
         <div v-if="activeTab === 'upload'" class="card">
           <h3 class="text-lg font-semibold text-gray-900 mb-6">Export Grades</h3>
-          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -202,7 +212,16 @@ interface User {
   id: string;
   username: string;
   name: string;
-  user_id:String;
+  user_id: string; 
+}
+interface Mark {
+  mark_id: number; 
+  enrollment_id: number; 
+  component_id: number; 
+  mark_obtained: string; 
+  recorded_by: number; 
+  max_mark: string; 
+  weight_percentage: string; 
 }
 
 const gradesStore = useGradesStore();
@@ -212,7 +231,8 @@ const selectedCourse = ref('');
 
 // This ref will hold the student data we fetch from the API
 const students = ref<any[]>([]); 
-const isLoading = ref(false);  // Declare isLoading
+const isLoading = ref(false); 
+const studentGrades = reactive<Record<string, string>>({}); 
 
 // All reactive variables needed by the template
 const uploadedFile = ref<File | null>(null);
@@ -227,59 +247,10 @@ const pendingGrading = ref(12); // Mock
 const classAverage = ref(78.5); // Mock
 
 const classPerformanceData = { // Mock data for the chart
-  labels: ['Quiz 1', 'Quiz 2', 'Assignment 1', 'Midterm', 'Assignment 2', 'Quiz 3'],
-  values: [75, 78, 82, 76, 85, 79]
+  labels: ['Quiz 1', 'Quiz 2', 'Assignment 1', 'Midterm', 'Assignment 2', 'Quiz 3', 'Final Exam'], // 7 elements
+  values: [75, 78, 82, 76, 85, 79, 90] // 7 elements
 };
-// const API_BASE_URL = process.env.VUE_APP_API_BASE_URL || 'http://localhost:8219';
-// console.log(process.env.VUE_APP_API_BASE_URL); // Should print the value or 'http://localhost:8219'
 
-// Fetch data when the component loads
-// onMounted(() => {
-//   const userString = sessionStorage.getItem('user');
-//   if (userString) {
-//     try {
-//       currentUser.value = JSON.parse(userString);
-//       if (currentUser.value?.username) {
-//         fetchLecturerStudents();  // Fetch students based on the username
-//       }
-//     } catch (e) {
-//       console.error('Could not parse user from sessionStorage', e);
-//     }
-//   }
-// });
-
-// Method to call the store and populate local data
-// async function fetchLecturerStudents() {
-//   const token = sessionStorage.getItem('token');
-
-//   if (!token) {
-//     console.error('No authentication token found.');
-//     return;
-//   }
-
-//   try {
-//     const headers = {
-//       'Content-Type': 'application/json',
-//       'Authorization': `Bearer ${token}`
-//     };
-
-//     // Assuming the endpoint is '/lecturer/{id}/students' and you fetch students based on the lecturer ID
-//     // Replace `{lecturerId}` with actual lecturer ID or username
-//     const lecturerId = currentUser.value?.user_id; // or use another identifier for the lecturer
-// // Correct the URL here to match your backend API endpoint
-// const response = await fetch(`${API_BASE_URL}/users/lecturer/${currentUser.value?.username}/students`, { headers });
-
-//     if (!response.ok) {
-//       throw new Error(`Failed to fetch lecturer students: ${response.statusText}`);
-//     }
-
-//     const studentsData = await response.json();
-//     students.value = studentsData.students;  // Populate the students list
-
-//   } catch (error) {
-//     console.error('Error fetching lecturer students:', error);
-//   } 
-// }
 async function fetchLecturerStudents() {
   const token = sessionStorage.getItem('token');
 
@@ -289,7 +260,7 @@ async function fetchLecturerStudents() {
   }
 
   try {
-    isLoading.value = true;  // Start loading
+    isLoading.value = true; 
 
     const headers = {
       'Content-Type': 'application/json',
@@ -301,34 +272,115 @@ async function fetchLecturerStudents() {
     if (!response.ok) {
       throw new Error(`Failed to fetch lecturer students: ${response.statusText}`);
     }
-   if (!response.ok) {
-        throw new Error(`Failed to fetch lecturer students: ${response.statusText}`);
-    }
+    
     const studentsData = await response.json();
-    students.value = studentsData.students;  // Populate students
+    students.value = studentsData.students; // Populate students
 
   } catch (error) {
     console.error('Error fetching lecturer students:', error);
   } finally {
-    isLoading.value = false;  // Stop loading
+    isLoading.value = false; 
   }
 }
 
-// Call fetchLecturerStudents when component loads
-onMounted(() => {
+async function fetchStudentMarks(studentId: string): Promise<Mark[]> {
+  const token = sessionStorage.getItem('token'); 
+  const response = await fetch(`http://localhost:8219/student-marks/all/${studentId}`, {
+    method: 'GET',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+  });
+
+  if (!response.ok) {
+    console.error('Failed to fetch student marks:', response.statusText);
+    return []; 
+  }
+
+  try {
+    const data = await response.json();
+    // Ensure the returned data is an array before processing
+    if (Array.isArray(data)) {
+      return data;
+    } else {
+      console.warn(`Expected an array of student marks, but received:`, data);
+      // If it's a single object, wrap it in an array for calculateCurrentGrade
+      if (typeof data === 'object' && data !== null) {
+        return [data];
+      }
+      return []; 
+    }
+  } catch (error) {
+    console.error('Error parsing student marks JSON:', error);
+    return []; 
+  }
+}
+
+function calculateCurrentGrade(studentMarks: Mark[]): string {
+  let totalWeightedScoreSum = 0; 
+  let totalWeightSum = 0;       
+
+  studentMarks.forEach((mark: Mark) => {
+    // Log the raw and parsed values for debugging
+    console.log(`Processing mark:`, mark);
+    const markObtained = parseFloat(mark.mark_obtained);
+    const maxMark = parseFloat(mark.max_mark);
+    const weightPercentage = parseFloat(mark.weight_percentage);
+
+    console.log(`Parsed values - markObtained: ${markObtained}, maxMark: ${maxMark}, weightPercentage: ${weightPercentage}`);
+
+    if (!isNaN(markObtained) && !isNaN(maxMark) && maxMark > 0 && !isNaN(weightPercentage)) {
+      const scoreRatio = markObtained / maxMark; 
+      const weightDecimal = weightPercentage / 100; 
+
+      totalWeightedScoreSum += scoreRatio * weightDecimal;
+      totalWeightSum += weightDecimal;
+      console.log(`Valid mark - scoreRatio: ${scoreRatio}, weightDecimal: ${weightDecimal}, totalWeightedScoreSum: ${totalWeightedScoreSum}, totalWeightSum: ${totalWeightSum}`);
+    } else {
+      console.warn('Invalid mark data encountered (after parseFloat):', mark, { markObtained, maxMark, weightPercentage });
+    }
+  });
+
+  if (totalWeightSum === 0) {
+    console.log('Total weight sum is 0, returning 0.00%');
+    return '0.00'; 
+  }
+
+  const finalGrade = (totalWeightedScoreSum / totalWeightSum) * 100;
+  console.log(`Calculated final grade: ${finalGrade.toFixed(2)}%`);
+  return finalGrade.toFixed(2);
+}
+
+async function getStudentCurrentGrade(studentId: string) {
+  const marks = await fetchStudentMarks(studentId); 
+  console.log(`Marks for student ${studentId}:`, marks);
+  const grade = calculateCurrentGrade(marks); 
+  console.log(`Grade for student ${studentId}:`, grade);
+
+  studentGrades[studentId] = grade; 
+
+  return grade; 
+}
+
+onMounted(async () => { 
   const userString = sessionStorage.getItem('user');
   if (userString) {
     try {
       currentUser.value = JSON.parse(userString);
       if (currentUser.value?.username) {
-        fetchLecturerStudents();
+        await fetchLecturerStudents(); 
       }
     } catch (e) {
       console.error('Could not parse user from sessionStorage', e);
     }
   }
+
+  for (const student of students.value) { 
+    await getStudentCurrentGrade(student.user_id); 
+  }
 });
-// Placeholder methods for template functions
+
 const createAssessment = () => {
   alert('Create Assessment logic goes here.');
 };
@@ -340,3 +392,27 @@ const handleFileUpload = (event: Event) => {
   }
 };
 </script>
+
+<style scoped>
+/* Add any component-specific styles here if needed */
+/* Example for input-field and btn-primary classes */
+.input-field {
+  @apply block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:text-sm;
+}
+
+.btn-primary {
+  @apply inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500;
+}
+
+.btn-secondary {
+  @apply inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500;
+}
+
+.card {
+  @apply bg-white shadow overflow-hidden sm:rounded-lg p-6;
+}
+
+.table-row:hover {
+  background-color: #f9fafb; /* Light gray on hover */
+}
+</style>
