@@ -105,8 +105,9 @@
             <div class="flex items-center space-x-3">
               <select v-model="selectedCourse" class="text-sm border-gray-300 rounded-lg focus:ring-primary-500 focus:border-primary-500">
                 <option value="">All Courses</option>
-                <option value="CS101">CS101 - Programming Fundamentals</option>
-                <option value="CS201">CS201 - Data Structures</option>
+                <option v-for="courseCode in availableCourses" :key="courseCode" :value="courseCode">
+                  {{ courseCode }}
+                </option>
               </select>
               <button class="btn-primary text-sm">
                 Add Student
@@ -115,8 +116,8 @@
           </div>
           
           <div v-if="isLoading"><p>Loading students...</p></div>
-          <div v-else-if="students.length === 0" class="text-center py-8 text-gray-500">
-            <p>No students found for this lecturer.</p>
+          <div v-else-if="filteredStudents.length === 0" class="text-center py-8 text-gray-500">
+            <p>No students found for the selected course or no students available.</p>
           </div>
           <div v-else class="overflow-x-auto">
             <table class="min-w-full divide-y divide-gray-200">
@@ -130,7 +131,7 @@
                 </tr>
               </thead>
               <tbody class="bg-white divide-y divide-gray-200">
-                <tr v-for="student in students" :key="student.user_id" class="table-row">
+                <tr v-for="student in filteredStudents" :key="student.user_id" class="table-row">
                   <td class="px-6 py-4 whitespace-nowrap">
                     <div class="flex items-center">
                       <img :src="student.profile_picture || 'https://placehold.co/32x32/E0E0E0/888888?text=DP'" alt="Profile" class="h-8 w-8 rounded-full">
@@ -160,7 +161,7 @@
             <div>
               <label class="block text-sm font-medium text-gray-700 mb-2">Course</label>
               <select v-model="gradeForm.courseId" class="input-field">
-                <option value="">Select Course</option><option value="CS101">CS101</option><option value="CS201">CS201</option>
+                <option value="">Select Course</option><option value="1">CS101</option><option value="2">CS201</option>
               </select>
             </div>
             <div>
@@ -227,7 +228,7 @@ interface Mark {
 const gradesStore = useGradesStore();
 const currentUser = ref<User | null>(null);
 const activeTab = ref('students');
-const selectedCourse = ref('');
+const selectedCourse = ref(''); // Now used for filtering
 
 // This ref will hold the student data we fetch from the API
 const students = ref<any[]>([]); 
@@ -250,6 +251,26 @@ const classPerformanceData = { // Mock data for the chart
   labels: ['Quiz 1', 'Quiz 2', 'Assignment 1', 'Midterm', 'Assignment 2', 'Quiz 3', 'Final Exam'], // 7 elements
   values: [75, 78, 82, 76, 85, 79, 90] // 7 elements
 };
+
+// Computed property for filtering students based on selectedCourse
+const filteredStudents = computed(() => {
+  if (!selectedCourse.value) {
+    return students.value; // If no course is selected, show all students
+  }
+  return students.value.filter(student => student.course_code === selectedCourse.value);
+});
+
+// Computed property to extract unique course codes for the filter dropdown
+const availableCourses = computed(() => {
+  const courses = new Set<string>();
+  students.value.forEach(student => {
+    if (student.course_code) {
+      courses.add(student.course_code);
+    }
+  });
+  return Array.from(courses);
+});
+
 
 async function fetchLecturerStudents() {
   const token = sessionStorage.getItem('token');
@@ -300,12 +321,10 @@ async function fetchStudentMarks(studentId: string): Promise<Mark[]> {
 
   try {
     const data = await response.json();
-    // Ensure the returned data is an array before processing
     if (Array.isArray(data)) {
       return data;
     } else {
       console.warn(`Expected an array of student marks, but received:`, data);
-      // If it's a single object, wrap it in an array for calculateCurrentGrade
       if (typeof data === 'object' && data !== null) {
         return [data];
       }
@@ -322,13 +341,9 @@ function calculateCurrentGrade(studentMarks: Mark[]): string {
   let totalWeightSum = 0;       
 
   studentMarks.forEach((mark: Mark) => {
-    // Log the raw and parsed values for debugging
-    console.log(`Processing mark:`, mark);
     const markObtained = parseFloat(mark.mark_obtained);
     const maxMark = parseFloat(mark.max_mark);
     const weightPercentage = parseFloat(mark.weight_percentage);
-
-    console.log(`Parsed values - markObtained: ${markObtained}, maxMark: ${maxMark}, weightPercentage: ${weightPercentage}`);
 
     if (!isNaN(markObtained) && !isNaN(maxMark) && maxMark > 0 && !isNaN(weightPercentage)) {
       const scoreRatio = markObtained / maxMark; 
@@ -336,27 +351,22 @@ function calculateCurrentGrade(studentMarks: Mark[]): string {
 
       totalWeightedScoreSum += scoreRatio * weightDecimal;
       totalWeightSum += weightDecimal;
-      console.log(`Valid mark - scoreRatio: ${scoreRatio}, weightDecimal: ${weightDecimal}, totalWeightedScoreSum: ${totalWeightedScoreSum}, totalWeightSum: ${totalWeightSum}`);
     } else {
       console.warn('Invalid mark data encountered (after parseFloat):', mark, { markObtained, maxMark, weightPercentage });
     }
   });
 
   if (totalWeightSum === 0) {
-    console.log('Total weight sum is 0, returning 0.00%');
     return '0.00'; 
   }
 
   const finalGrade = (totalWeightedScoreSum / totalWeightSum) * 100;
-  console.log(`Calculated final grade: ${finalGrade.toFixed(2)}%`);
   return finalGrade.toFixed(2);
 }
 
 async function getStudentCurrentGrade(studentId: string) {
   const marks = await fetchStudentMarks(studentId); 
-  console.log(`Marks for student ${studentId}:`, marks);
   const grade = calculateCurrentGrade(marks); 
-  console.log(`Grade for student ${studentId}:`, grade);
 
   studentGrades[studentId] = grade; 
 
@@ -376,12 +386,15 @@ onMounted(async () => {
     }
   }
 
+  // After students are fetched, iterate and get their grades
+  // This loop needs to run AFTER students.value is populated by fetchLecturerStudents
   for (const student of students.value) { 
     await getStudentCurrentGrade(student.user_id); 
   }
 });
 
 const createAssessment = () => {
+  // Replace with actual assessment creation logic
   alert('Create Assessment logic goes here.');
 };
 const handleFileUpload = (event: Event) => {
