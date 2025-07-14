@@ -109,8 +109,9 @@
                   {{ courseCode }}
                 </option>
               </select>
-              <button class="btn-primary text-sm">
-                Add Student
+              <!-- Changed button text and click handler -->
+              <button @click="openAssignStudentToCourseModal" class="btn-primary text-sm">
+                Assign Student to Course
               </button>
             </div>
           </div>
@@ -146,8 +147,8 @@
                     {{ studentGrades[student.user_id] !== undefined ? studentGrades[student.user_id] : 'Loading...' }}%
                   </td>
                   <td class="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
-                    <button class="text-primary-600 hover:text-primary-900">Edit</button>
-                    <button class="text-secondary-600 hover:text-secondary-900">View Details</button>
+                    <button @click="openEditStudentModal(student)" class="text-primary-600 hover:text-primary-900">Edit</button>
+                    <button @click="openViewStudentDetailsModal(student)" class="text-secondary-600 hover:text-secondary-900">View Details</button>
                   </td>
                 </tr>
               </tbody>
@@ -187,6 +188,20 @@
         </div>
       </div>
     </div>
+
+    <!-- Modals for Edit, View Student, and NEW Assign Student -->
+    <!-- Removed AddStudentModal component -->
+    <EditStudentModal :show="showEditStudentModal" :student="selectedStudent" @close="closeModals" @update-student="handleUpdateStudent" />
+    <ViewStudentDetailsModal :show="showViewStudentDetailsModal" :student="selectedStudent" @close="closeModals" />
+
+    <!-- NEW: Assign Student to Course Modal -->
+    <AssignStudentToCourseModal 
+      :show="showAssignStudentToCourseModal" 
+      :lecturerCourses="lecturerCourses"
+      @close="closeAssignStudentToCourseModal" 
+      @assign-students="handleAssignStudentsToCourse" 
+    />
+
   </div>
 </template>
 
@@ -208,6 +223,13 @@ import StatsCard from '../components/shared/StatsCard.vue'
 import PerformanceChart from '../components/charts/PerformanceChart.vue'
 import { useGradesStore } from '../stores/grades'
 
+// Removed import for AddStudentModal
+import EditStudentModal from '../components/modals/EditStudentModal.vue';
+import ViewStudentDetailsModal from '../components/modals/ViewStudentModal.vue';
+// NEW: Import the new Assign Student modal
+import AssignStudentToCourseModal from '../components/modals/AssignStudentToCourseModal.vue';
+
+
 // Interface for the user object from sessionStorage
 interface User {
   id: string;
@@ -224,16 +246,32 @@ interface Mark {
   max_mark: string; 
   weight_percentage: string; 
 }
+// NEW: Interface for Course
+interface Course {
+  course_id: number;
+  course_code: string;
+  course_name: string;
+}
+
 
 const gradesStore = useGradesStore();
 const currentUser = ref<User | null>(null);
 const activeTab = ref('students');
-const selectedCourse = ref(''); // Now used for filtering
+const selectedCourse = ref(''); 
 
 // This ref will hold the student data we fetch from the API
 const students = ref<any[]>([]); 
 const isLoading = ref(false); 
 const studentGrades = reactive<Record<string, string>>({}); 
+
+// State for modals
+// Removed showAddStudentModal
+const showEditStudentModal = ref(false);
+const showViewStudentDetailsModal = ref(false);
+const selectedStudent = ref<any | null>(null); // To hold the student object for edit/view
+// NEW: State for the new assign student modal
+const showAssignStudentToCourseModal = ref(false);
+
 
 // All reactive variables needed by the template
 const uploadedFile = ref<File | null>(null);
@@ -252,15 +290,13 @@ const classPerformanceData = { // Mock data for the chart
   values: [75, 78, 82, 76, 85, 79, 90] // 7 elements
 };
 
-// Computed property for filtering students based on selectedCourse
 const filteredStudents = computed(() => {
   if (!selectedCourse.value) {
-    return students.value; // If no course is selected, show all students
+    return students.value; 
   }
   return students.value.filter(student => student.course_code === selectedCourse.value);
 });
 
-// Computed property to extract unique course codes for the filter dropdown
 const availableCourses = computed(() => {
   const courses = new Set<string>();
   students.value.forEach(student => {
@@ -271,6 +307,34 @@ const availableCourses = computed(() => {
   return Array.from(courses);
 });
 
+// NEW: Ref to hold lecturer's courses
+const lecturerCourses = ref<Course[]>([]);
+
+// NEW: Function to fetch lecturer's courses
+async function fetchLecturerCourses() {
+  const token = sessionStorage.getItem('token');
+  if (!token) {
+    console.error('No authentication token found.');
+    return;
+  }
+
+  try {
+    const response = await fetch(`http://localhost:8219/courses/lecturer/${currentUser.value?.username}`, { // Corrected URL
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch lecturer courses: ${response.statusText}`);
+    }
+    const data = await response.json();
+    lecturerCourses.value = data.courses;
+  } catch (error) {
+    console.error('Error fetching lecturer courses:', error);
+  }
+}
 
 async function fetchLecturerStudents() {
   const token = sessionStorage.getItem('token');
@@ -295,7 +359,7 @@ async function fetchLecturerStudents() {
     }
     
     const studentsData = await response.json();
-    students.value = studentsData.students; // Populate students
+    students.value = studentsData.students; 
 
   } catch (error) {
     console.error('Error fetching lecturer students:', error);
@@ -380,21 +444,93 @@ onMounted(async () => {
       currentUser.value = JSON.parse(userString);
       if (currentUser.value?.username) {
         await fetchLecturerStudents(); 
+        await fetchLecturerCourses(); // NEW: Fetch lecturer's courses on mount
       }
     } catch (e) {
       console.error('Could not parse user from sessionStorage', e);
     }
   }
 
-  // After students are fetched, iterate and get their grades
-  // This loop needs to run AFTER students.value is populated by fetchLecturerStudents
   for (const student of students.value) { 
     await getStudentCurrentGrade(student.user_id); 
   }
 });
 
+// Modal control functions
+// Removed openAddStudentModal and handleAddStudent as they are replaced
+const openEditStudentModal = (student: any) => {
+  selectedStudent.value = { ...student }; 
+  showEditStudentModal.value = true;
+};
+
+const openViewStudentDetailsModal = (student: any) => {
+  selectedStudent.value = { ...student }; 
+  showViewStudentDetailsModal.value = true;
+};
+
+const closeModals = () => {
+  // Removed showAddStudentModal.value = false;
+  showEditStudentModal.value = false;
+  showViewStudentDetailsModal.value = false;
+  selectedStudent.value = null; 
+};
+
+// NEW: Functions for Assign Student to Course Modal
+const openAssignStudentToCourseModal = () => {
+  showAssignStudentToCourseModal.value = true;
+};
+
+const closeAssignStudentToCourseModal = () => {
+  showAssignStudentToCourseModal.value = false;
+};
+
+const handleAssignStudentsToCourse = async (payload: { courseId: number; studentIds: number[] }) => {
+  console.log('Attempting to assign students:', payload.studentIds, 'to course:', payload.courseId);
+  const token = sessionStorage.getItem('token');
+
+  if (!token) {
+    alert('Authentication token missing. Please log in again.');
+    return;
+  }
+
+  try {
+    const response = await fetch(`http://localhost:8219/courses/${payload.courseId}/add-students`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({ student_ids: payload.studentIds })
+    });
+
+    const result = await response.json();
+
+    if (response.ok) {
+      alert(result.message || 'Students assigned to course successfully!');
+      closeAssignStudentToCourseModal();
+      await fetchLecturerStudents(); // Refresh the student list to reflect new enrollments
+      // Re-fetch grades for all students after new enrollments
+      for (const student of students.value) {
+        await getStudentCurrentGrade(student.user_id);
+      }
+    } else {
+      alert(`Failed to assign students: ${result.error || 'Unknown error'}`);
+    }
+  } catch (error) {
+    console.error('Error assigning students to course:', error);
+    alert('An error occurred while assigning students.');
+  }
+};
+
+
+const handleUpdateStudent = (updatedStudentData: any) => {
+  console.log('Updating student:', updatedStudentData);
+  // Implement API call to update student
+  // After successful API call, refresh student list: await fetchLecturerStudents();
+  closeModals();
+};
+
 const createAssessment = () => {
-  // Replace with actual assessment creation logic
   alert('Create Assessment logic goes here.');
 };
 const handleFileUpload = (event: Event) => {
