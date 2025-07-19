@@ -33,14 +33,12 @@
         <StatsCard
           title="Consultations This Month"
           :value="consultationsThisMonth"
-          change="+3 from last month"
           :icon="CalendarDaysIcon"
           variant="secondary"
         />
         <StatsCard
           title="Average Advisee GPA"
           :value="averageAdviseeGPA.toFixed(2)"
-          change="+0.15 improvement"
           :icon="AcademicCapIcon"
           variant="success"
         />
@@ -68,7 +66,7 @@
                         :style="{ width: (student.gpa / 4.0) * 100 + '%' }"
                       ></div>
                     </div>
-                    <div class="text-xs text-gray-600 mt-1">GPA: {{ student.gpa ? student.gpa.toFixed(2) : 'N/A' }}</div>
+                    <div class="text-xs text-gray-600 mt-1">GPA: {{ student.gpa !== null && student.gpa !== undefined ? student.gpa.toFixed(2) : 'N/A' }}</div>
                   </div>
                 </div>
               </div>
@@ -172,7 +170,7 @@
                       <img :src="student.profile_picture || 'https://placehold.co/40x40/cccccc/000000?text=👤'" alt="Profile Picture" class="h-8 w-8 rounded-full">
                       <div class="ml-3">
                         <div class="text-sm font-medium text-gray-900">{{ student.full_name }}</div>
-                        <div class="text-sm text-gray-500">{{ student.program || 'N/A' }}</div>
+                        <div class="text-sm text-gray-500">{{ student.program }}</div>
                       </div>
                     </div>
                   </td>
@@ -180,7 +178,7 @@
                     {{ student.matric_number }}
                   </td>
                   <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {{ student.gpa ? student.gpa.toFixed(2) : 'N/A' }}
+                    {{ student.gpa !== null && student.gpa !== undefined ? student.gpa.toFixed(2) : 'N/A' }}
                   </td>
                   <td class="px-6 py-4 whitespace-nowrap">
                     <span :class="getStatusColor(student.status)" class="px-2 py-1 text-xs font-medium rounded-full">
@@ -228,7 +226,7 @@
                   <div class="mt-2 space-y-1">
                     <div class="flex items-center justify-between text-sm">
                       <span class="text-gray-600">Current GPA:</span>
-                      <span class="font-medium text-red-600">{{ student.gpa ? student.gpa.toFixed(2) : 'N/A' }}</span>
+                      <span class="font-medium text-red-600">{{ student.gpa !== null && student.gpa !== undefined ? student.gpa.toFixed(2) : 'N/A' }}</span>
                     </div>
                     <div class="flex items-center justify-between text-sm">
                       <span class="text-gray-600">Risk Factors:</span>
@@ -437,19 +435,23 @@ const advisees = ref<any[]>([])
 
 // Stats - now computed from fetched data
 const totalAdvisees = computed(() => advisees.value.length)
-const atRiskStudents = computed(() => advisees.value.filter(student => student.status === 'At Risk').length)
+const atRiskStudents = computed(() => advisees.value.filter(student => student.gpa !== null && student.gpa < 2.5).length) // Assuming GPA < 2.5 is "At Risk"
 const consultationsThisMonth = ref(0) // This would require a separate API call or more complex filtering on fetched consultation records
 const averageAdviseeGPA = computed(() => {
   if (advisees.value.length === 0) return 0;
-  // Ensure GPA is a number before summing; use 0 if not a number
-  const totalGpa = advisees.value.reduce((sum, student) => sum + (typeof student.gpa === 'number' ? student.gpa : 0), 0);
-  return totalGpa / advisees.value.length;
+  // Filter out students with null/undefined GPA before calculating average
+  const studentsWithGpa = advisees.value.filter(student => typeof student.gpa === 'number');
+  if (studentsWithGpa.length === 0) return 0;
+  const totalGpa = studentsWithGpa.reduce((sum, student) => sum + student.gpa, 0);
+  return totalGpa / studentsWithGpa.length;
 })
 
 // --- API Interactions ---
 
 /**
  * Fetches user details by ID, specifically for profile_picture and other potential fields.
+ * This function is now optional and will only be called if you need specific user details
+ * that are NOT provided by the student-marks/student/{id} endpoint.
  * @param {number} userId - The ID of the user (student) to fetch.
  * @returns {Promise<object|null>} - The user object or null if an error occurs.
  */
@@ -466,14 +468,115 @@ const fetchUserDetails = async (userId: number) => {
     return data;
   } catch (error: any) {
     console.error(`Error fetching user details for ${userId}:`, error);
-    // Don't set global error message for individual student failures
     return null;
   }
 };
 
+/**
+ * Fetches student marks for a given student ID.
+ * This endpoint now returns marks, max_mark, weight_percentage, and credit_hours.
+ * @param {number} studentId - The ID of the student.
+ * @returns {Promise<Array<any>>} - An array of mark objects or empty array.
+ */
+const fetchStudentMarks = async (studentId: number) => {
+  try {
+    const headers = getAuthHeaders();
+const response = await fetch(`${API_BASE_URL}/student-marks/all/${studentId}`, { headers });
+    const data = await response.json();
+
+    // Check if the response is not OK (e.g., 403, 405, 500)
+    if (!response.ok) {
+        // If the server returns HTML instead of JSON (e.g., for 405 Method Not Allowed)
+        // the .json() parsing will fail, leading to SyntaxError.
+        // We can try to read it as text to log the actual server response.
+        const errorText = await response.text();
+        console.error(`Failed to fetch marks for student ${studentId}: Status ${response.status}, Error: ${errorText}`);
+        setErrorMessage(`Failed to load student marks. Server responded with: ${response.status} ${response.statusText}. Please check backend logs.`);
+        return [];
+    }
+    return data;
+  } catch (error: any) {
+    // This catch block will handle network errors or JSON parsing errors (like SyntaxError)
+    console.error(`Error fetching marks for student ${studentId}:`, error);
+    setErrorMessage(`Network error or data parsing issue for student marks. Details: ${error.message}`);
+    return [];
+  }
+};
 
 /**
- * Fetches advisee students from the backend and then fetches their full user details.
+ * Calculates the GPA for a single student based on their marks, component weights, and course credit hours.
+ * @param {Array<any>} studentMarks - Array of mark objects for a student.
+ * @returns {number} - The calculated GPA.
+ */
+const calculateGPA = (studentMarks: any[]): number => {
+  const courseGrades: { [courseId: number]: { totalWeightedScore: number; totalWeight: number; creditHours: number } } = {};
+
+  studentMarks.forEach(mark => {
+    const courseId = mark.course_id;
+    const markObtained = parseFloat(mark.mark_obtained);
+    const maxMark = parseFloat(mark.max_mark);
+    const weightPercentage = parseFloat(mark.weight_percentage);
+    const creditHours = parseFloat(mark.credit_hours);
+
+    // Skip if essential data is missing or invalid
+    if (isNaN(markObtained) || isNaN(maxMark) || isNaN(weightPercentage) || isNaN(creditHours) || maxMark === 0) {
+      console.warn(`Skipping invalid mark data for course ${courseId}, component ${mark.component_id}:`, mark);
+      return;
+    }
+
+    // Convert mark to a percentage of the component's max mark
+    const componentScore = (markObtained / maxMark) * weightPercentage;
+
+    if (!courseGrades[courseId]) {
+      courseGrades[courseId] = {
+        totalWeightedScore: 0,
+        totalWeight: 0,
+        creditHours: creditHours // Store credit hours for the course
+      };
+    }
+
+    courseGrades[courseId].totalWeightedScore += componentScore;
+    courseGrades[courseId].totalWeight += weightPercentage;
+  });
+
+  let totalGradePoints = 0;
+  let totalCreditHours = 0;
+
+  for (const courseId in courseGrades) {
+    const course = courseGrades[courseId];
+    // Ensure totalWeight is not zero to avoid division by zero
+    if (course.totalWeight > 0) {
+      const finalCoursePercentage = (course.totalWeightedScore / course.totalWeight) * 100;
+      const gradePoint = convertPercentageToGradePoint(finalCoursePercentage);
+      totalGradePoints += gradePoint * course.creditHours;
+      totalCreditHours += course.creditHours;
+    }
+  }
+
+  if (totalCreditHours === 0) {
+    return 0; // Avoid division by zero if no valid courses with credit hours
+  }
+
+  return totalGradePoints / totalCreditHours;
+};
+
+/**
+ * Converts a percentage score to a GPA grade point (e.g., 90% -> 4.0, 80% -> 3.0).
+ * This is a simplified example and should be adjusted to your institution's grading scale.
+ * @param {number} percentage - The final percentage score for a course.
+ * @returns {number} - The corresponding grade point.
+ */
+const convertPercentageToGradePoint = (percentage: number): number => {
+  if (percentage >= 90) return 4.0;
+  if (percentage >= 80) return 3.0;
+  if (percentage >= 70) return 2.0;
+  if (percentage >= 60) return 1.0;
+  return 0.0;
+};
+
+
+/**
+ * Fetches advisee students from the backend and then fetches their full user details and calculates GPA.
  */
 const fetchAdvisees = async () => {
   setMessage('')
@@ -487,21 +590,38 @@ const fetchAdvisees = async () => {
       throw new Error(data.error || 'Failed to fetch advisees summary');
     }
 
-    // Now, for each advisee from the summary, fetch their full user details
+    // Use Promise.all to fetch all marks and user details concurrently
     const detailedAdviseesPromises = data.map(async (adviseeSummary: any) => {
-      const userDetails = await fetchUserDetails(adviseeSummary.student_id);
+      // Concurrently fetch student marks and user details (for the profile picture)
+      const [studentMarks, userDetails] = await Promise.all([
+        fetchStudentMarks(adviseeSummary.student_id),
+        fetchUserDetails(adviseeSummary.student_id)
+      ]);
+      
+      // Calculate GPA for the student
+      const gpa = calculateGPA(studentMarks);
 
-      // Merge data from both API calls
+      // Determine student status based on GPA (example logic)
+      let status = 'N/A';
+      if (gpa !== null && gpa !== undefined) {
+          if (gpa >= 3.5) status = 'Excellent';
+          else if (gpa >= 2.5) status = 'Good Standing';
+          else if (gpa < 2.5 && gpa > 0) status = 'At Risk'; // Consider 0 GPA as also at risk if no courses
+          else status = 'N/A'; // For cases where GPA is 0 due to no courses/marks
+      }
+
+      // We can get full_name and matric_number directly from adviseeSummary
+      // If profile_picture is not available from student-marks endpoint, you might need
+      // to rely on a placeholder or a separate /users/{id} call if absolutely necessary
+      // and if that endpoint's permissions are adjusted.
       return {
         ...adviseeSummary, // Keep all fields from /advisor-student
-        full_name: userDetails?.full_name || adviseeSummary.student_name, // Prioritize userDetails, fallback to summary
-        profile_picture: userDetails?.profile_picture || null, // Get profile picture from userDetails
-        // If your /users/{id} API provides GPA, status, program, etc., you can use them here
-        // Otherwise, they will remain null/undefined and trigger the 'N/A' fallbacks as before
-        gpa: userDetails?.gpa || null,
-        status: userDetails?.status || null,
-        last_meeting: userDetails?.last_meeting || null,
-        program: userDetails?.program || null,
+        full_name: adviseeSummary.student_name, // Use student_name from advisor-student endpoint
+        profile_picture: userDetails?.profile_picture || null, // Use profile_picture from the user details API call
+        gpa: gpa, 
+        status: status, // Dynamically set status based on calculated GPA
+        last_meeting: adviseeSummary.last_meeting_date || null, // Use last_meeting_date from the updated backend API response
+        program: adviseeSummary.program || null, // Assuming this comes from advisor-student
       };
     });
 
@@ -628,7 +748,7 @@ const filteredAdvisees = computed(() => {
 })
 
 const atRiskStudentsList = computed(() =>
-  advisees.value.filter(student => student.status === 'At Risk')
+  advisees.value.filter(student => student.gpa !== null && student.gpa < 2.5) // Filter based on calculated GPA
 )
 
 // Reactive data for consultation records (will be populated by API)
@@ -691,24 +811,24 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-/* Add your component-specific styles here if needed */
+/* Scoped styles remain as they are, no changes needed for GPA functionality */
 .card {
-  @apply bg-white p-6 rounded-lg shadow-sm border border-gray-200;
+  @apply bg-white p-6 rounded-lg shadow-md;
 }
 
 .input-field {
-  @apply block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm;
+  @apply mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm;
 }
 
 .btn-primary {
-  @apply inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500;
+  @apply inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500;
 }
 
 .btn-secondary {
-  @apply inline-flex justify-center py-2 px-4 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500;
+  @apply inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500;
 }
 
 .table-row:hover {
-  background-color: #f9fafb; /* Light gray on hover */
+  background-color: #f5f5f5;
 }
 </style>
