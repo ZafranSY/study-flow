@@ -294,7 +294,11 @@
         </div>
 
         <div v-if="activeTab === 'export'" class="card">
-          <h3 class="text-lg font-semibold text-gray-900 mb-6">Export Grades</h3>
+          <h3 class="text-lg font-semibold text-gray-900 mb-6">Export Grades and Data</h3>
+          <p class="text-gray-600 mb-4">Export all relevant dashboard data (students, courses, assessments, grades) as a JSON file.</p>
+          <button @click="exportAllDataToJson" class="btn-primary">
+            Export All Data as JSON
+          </button>
         </div>
       </div>
     </div>
@@ -980,7 +984,7 @@ async function saveAssessment() {
         component_name: assessmentForm.component_name,
         max_mark: assessmentForm.max_mark,
         weight_percentage: assessmentForm.weight_percentage,
-        // is_final_exam: assessmentForm.is_final_exam,
+        is_final_exam: assessmentForm.is_final_exam,
         // Do NOT send course_id for update, as it's typically not changeable for an existing component
       };
     } else {
@@ -992,7 +996,7 @@ async function saveAssessment() {
         component_name: assessmentForm.component_name,
         max_mark: assessmentForm.max_mark,
         weight_percentage: assessmentForm.weight_percentage,
-        // is_final_exam: assessmentForm.is_final_exam,
+        is_final_exam: assessmentForm.is_final_exam,
       };
     }
 
@@ -1185,6 +1189,43 @@ const handleUpdateStudent = async (updatedStudentData: any) => {
     alert(`Error updating student: ${error.message}`);
   }
 };
+
+// NEW: Function to export all data as JSON
+async function exportAllDataToJson() {
+  try {
+    // Gather all relevant data
+    const exportData = {
+      lecturerCourses: lecturerCourses.value,
+      students: students.value,
+      studentGrades: studentGrades, // This is reactive, so it holds current grades
+      // You might also want to fetch all assessments regardless of selection for a full dump
+      // For simplicity, we'll use currently loaded assessments and student marks
+      // If you need *all* assessments and marks for *all* courses, you'd need new API calls or a backend endpoint for it.
+      currentAssessmentsInView: assessments.value,
+      currentStudentMarksInView: studentMarks.value,
+    };
+
+    const jsonString = JSON.stringify(exportData, null, 2); // Pretty print JSON
+
+    // Create a Blob from the JSON string
+    const blob = new Blob([jsonString], { type: 'application/json' });
+
+    // Create a download link
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `lecturer_dashboard_data_${new Date().toISOString().slice(0, 10)}.json`; // Filename with date
+    document.body.appendChild(a); // Append to body to make it clickable
+    a.click(); // Programmatically click the link to trigger download
+    document.body.removeChild(a); // Clean up
+    URL.revokeObjectURL(url); // Release the object URL
+
+    alert('All dashboard data exported successfully as JSON!');
+  } catch (error) {
+    console.error('Error exporting data:', error);
+    alert(`Failed to export data: ${error.message}`);
+  }
+}
 
 const handleFileUpload = (event: Event) => {
   const target = event.target as HTMLInputElement;
