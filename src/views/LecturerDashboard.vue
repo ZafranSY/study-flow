@@ -1,7 +1,7 @@
 <template>
   <div class="min-h-screen bg-gray-50">
     <Navigation />
-    
+
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div class="mb-8">
         <h1 class="text-2xl font-bold text-gray-900">
@@ -32,7 +32,7 @@
         <StatsCard
           title="Class Average"
           :value="`${classAverage.toFixed(1)}%`"
-          change=" "  
+          change=" "
           :icon="ChartBarIcon"
           variant="success"
         />
@@ -64,7 +64,7 @@
                 <span class="text-sm font-medium">Manage Students</span>
               </div>
             </button>
-            
+
             <button
               @click="activeTab = 'grades'"
               class="w-full text-left px-3 py-2 rounded-lg hover:bg-gray-50 transition-colors"
@@ -74,17 +74,17 @@
                 <span class="text-sm font-medium">Grade Assignments</span>
               </div>
             </button>
-            
+
             <button
               @click="activeTab = 'assessments'"
               class="w-full text-left px-3 py-2 rounded-lg hover:bg-gray-50 transition-colors"
             >
               <div class="flex items-center space-x-3">
                 <DocumentPlusIcon class="h-5 w-5 text-gray-400" />
-                <span class="text-sm font-medium">Create Assessment</span>
+                <span class="text-sm font-medium">Manage Assessments</span>
               </div>
             </button>
-            
+
             <button
               @click="activeTab = 'export'"
               class="w-full text-left px-3 py-2 rounded-lg hover:bg-gray-50 transition-colors"
@@ -115,7 +115,7 @@
               </button>
             </div>
           </div>
-          
+
           <div v-if="isLoading"><p>Loading students...</p></div>
           <div v-else-if="filteredStudents.length === 0" class="text-center py-8 text-gray-500">
             <p>No students found for the selected course or no students available.</p>
@@ -238,9 +238,59 @@
         </div>
 
         <div v-if="activeTab === 'assessments'" class="card">
-          <h3 class="text-lg font-semibold text-gray-900 mb-6">Create New Assessment</h3>
-          <form @submit.prevent="createAssessment" class="space-y-6">
-          </form>
+          <div class="flex justify-between items-center mb-6">
+            <h3 class="text-lg font-semibold text-gray-900">Manage Assessments</h3>
+            <div class="flex items-center space-x-3">
+              <select
+                v-model="selectedCourseForAssessments"
+                @change="fetchLecturerAssessments"
+                class="text-sm border-gray-300 rounded-lg focus:ring-primary-500 focus:border-primary-500"
+              >
+                <option value="">Select Course</option>
+                <option v-for="course in lecturerCourses" :key="course.course_id" :value="course.course_id">
+                  {{ course.course_code }} - {{ course.course_name }}
+                </option>
+              </select>
+              <button @click="openAssessmentModal()" class="btn-primary text-sm" :disabled="!selectedCourseForAssessments">
+                Add New Assessment
+              </button>
+            </div>
+          </div>
+
+          <div v-if="loadingAssessments" class="text-center py-4 text-gray-500">Loading assessments...</div>
+          <div v-else-if="lecturerAssessments.length === 0" class="text-center py-8 text-gray-500">
+            <p v-if="selectedCourseForAssessments">No assessments found for this course. Add one!</p>
+            <p v-else>Please select a course to view and manage assessments.</p>
+          </div>
+          <div v-else class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200">
+              <thead class="bg-gray-50">
+                <tr>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Assessment Name</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Max Mark</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Weight (%)</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Final Exam</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                </tr>
+              </thead>
+              <tbody class="bg-white divide-y divide-gray-200">
+                <tr v-for="assessment in lecturerAssessments" :key="assessment.component_id">
+                  <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{{ assessment.component_name }}</td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ assessment.max_mark }}</td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ assessment.weight_percentage }}%</td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm">
+                    <span :class="{'text-green-600': assessment.is_final_exam, 'text-gray-500': !assessment.is_final_exam}">
+                      {{ assessment.is_final_exam ? 'Yes' : 'No' }}
+                    </span>
+                  </td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
+                    <button @click="openAssessmentModal(assessment)" class="text-primary-600 hover:text-primary-900">Edit</button>
+                    <button @click="deleteAssessment(assessment.component_id)" class="text-red-600 hover:text-red-900">Delete</button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </div>
 
         <div v-if="activeTab === 'export'" class="card">
@@ -253,19 +303,107 @@
     <EditStudentModal :show="showEditStudentModal" :student="selectedStudent" @close="closeModals" @update-student="handleUpdateStudent" />
     <ViewStudentDetailsModal :show="showViewStudentDetailsModal" :student="selectedStudent" @close="closeModals" />
 
-    <AssignStudentToCourseModal 
-      :show="showAssignStudentToCourseModal" 
+    <AssignStudentToCourseModal
+      :show="showAssignStudentToCourseModal"
       :lecturerCourses="lecturerCourses"
-      @close="closeAssignStudentToCourseModal" 
-      @assign-students="handleAssignStudentsToCourse" 
+      @close="closeAssignStudentToCourseModal"
+      @assign-students="handleAssignStudentsToCourse"
     />
+
+    <!-- Assessment Management Modal -->
+    <div v-if="showAssessmentModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+      <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-md mx-auto">
+        <h3 class="text-lg font-semibold text-gray-900 mb-4">
+          {{ isEditingAssessment ? 'Edit Assessment' : 'Add New Assessment' }}
+        </h3>
+        <form @submit.prevent="saveAssessment" class="space-y-4">
+          <div>
+            <label for="assessmentCourse" class="block text-sm font-medium text-gray-700">Course</label>
+            <select
+              id="assessmentCourse"
+              v-model="assessmentForm.course_id"
+              class="input-field"
+              required
+              :disabled="isEditingAssessment"
+            >
+              <option value="">Select Course</option>
+              <option v-for="course in lecturerCourses" :key="course.course_id" :value="course.course_id">
+                {{ course.course_code }} - {{ course.course_name }}
+              </option>
+            </select>
+          </div>
+          <div>
+            <label for="componentName" class="block text-sm font-medium text-gray-700">Assessment Name</label>
+            <input
+              type="text"
+              id="componentName"
+              v-model="assessmentForm.component_name"
+              class="input-field"
+              required
+            />
+          </div>
+          <div>
+            <label for="maxMark" class="block text-sm font-medium text-gray-700">Max Mark</label>
+            <input
+              type="number"
+              id="maxMark"
+              v-model.number="assessmentForm.max_mark"
+              class="input-field"
+              min="0.01"
+              step="0.01"
+              required
+            />
+          </div>
+          <div>
+            <label for="weightPercentage" class="block text-sm font-medium text-gray-700">Weight Percentage (%)</label>
+            <input
+              type="number"
+              id="weightPercentage"
+              v-model.number="assessmentForm.weight_percentage"
+              class="input-field"
+              min="0"
+              max="100"
+              step="0.1"
+              required
+            />
+          </div>
+          <div class="flex items-center">
+            <input
+              type="checkbox"
+              id="isFinalExam"
+              v-model="assessmentForm.is_final_exam"
+              class="h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+            />
+            <label for="isFinalExam" class="ml-2 block text-sm text-gray-900">Is Final Exam?</label>
+          </div>
+
+          <div class="flex justify-end space-x-3">
+            <button
+              type="button"
+              @click="closeAssessmentModal"
+              class="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              :disabled="isSavingAssessment"
+              class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+            >
+              <span v-if="isSavingAssessment">Saving...</span>
+              <span v-else>{{ isEditingAssessment ? 'Update Assessment' : 'Add Assessment' }}</span>
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
 
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, watch } from 'vue'
-import { useRouter } from 'vue-router'; // Import useRouter
+import { useRouter } from 'vue-router';
 import {
   BookOpenIcon,
   UsersIcon,
@@ -283,7 +421,7 @@ import PerformanceChart from '../components/charts/PerformanceChart.vue'
 import { useGradesStore } from '../stores/grades'
 
 import EditStudentModal from '../components/modals/EditStudentModal.vue';
-import ViewStudentDetailsModal from '../components/modals/ViewStudentModal.vue'; // Corrected import
+import ViewStudentDetailsModal from '../components/modals/ViewStudentModal.vue';
 import AssignStudentToCourseModal from '../components/modals/AssignStudentToCourseModal.vue';
 
 
@@ -292,19 +430,19 @@ interface User {
   id: string;
   username: string;
   name: string;
-  user_id: string; 
-  role: string; // Ensure role is included
+  user_id: string;
+  role: string;
 }
 interface Mark {
-  mark_id: number; 
-  enrollment_id: number; 
-  component_id: number; 
-  mark_obtained: string; 
-  recorded_by: number; 
-  max_mark: string; 
-  weight_percentage: string; 
+  mark_id: number;
+  enrollment_id: number;
+  component_id: number;
+  mark_obtained: string;
+  recorded_by: number;
+  max_mark: string;
+  weight_percentage: string;
 }
-// NEW: Interface for Course
+// Interface for Course
 interface Course {
   course_id: number;
   course_code: string;
@@ -315,56 +453,74 @@ interface AssessmentComponent {
   component_id: number;
   course_id: number;
   component_name: string;
-  weightage: number;
+  max_mark: number; // Changed to number for input binding
+  weight_percentage: number; // Changed to number for input binding
+  is_final_exam: boolean; // Changed to boolean for checkbox
 }
 
 interface StudentMark {
   student_id: number;
   full_name: string;
   matric_number: string;
-  mark: number | null; // Mark can be null if not yet assigned
-  student_mark_id?: number | null; // Optional, for existing marks
+  enrollment_id: number;
+  mark: number | null;
+  mark_id?: number | null;
 }
 
 
 const gradesStore = useGradesStore();
-const router = useRouter(); // Initialize useRouter
+const router = useRouter();
 const currentUser = ref<User | null>(null);
 const activeTab = ref('students');
-const selectedCourse = ref(''); 
+const selectedCourse = ref('');
 
 // This ref will hold the student data we fetch from the API
-const students = ref<any[]>([]); 
-const isLoading = ref(false); 
-const studentGrades = reactive<Record<string, string>>({}); 
+const students = ref<any[]>([]);
+const isLoading = ref(false);
+const studentGrades = reactive<Record<string, string>>({});
 
 // State for modals
 const showEditStudentModal = ref(false);
 const showViewStudentDetailsModal = ref(false);
-const selectedStudent = ref<any | null>(null); // To hold the student object for edit/view
+const selectedStudent = ref<any | null>(null);
 const showAssignStudentToCourseModal = ref(false);
 
 
 // All reactive variables needed by the template
 const uploadedFile = ref<File | null>(null);
-const gradeForm = reactive({ courseId: '', assessmentId: '' }); // Used for grade entry section
-const assessmentForm = reactive({ title: '', type: '', courseId: '', totalMarks: '', weightage: '', dueDate: '', description: '' });
-const uploadForm = reactive({ courseId: '', assessmentId: '' });
+const gradeForm = reactive({ courseId: '', assessmentId: '' });
+
+// Assessment Management specific refs
+const selectedCourseForAssessments = ref<number | ''>('');
+const lecturerAssessments = ref<AssessmentComponent[]>([]);
+const loadingAssessments = ref(false);
+const showAssessmentModal = ref(false);
+const isEditingAssessment = ref(false);
+const assessmentForm = reactive<AssessmentComponent>({
+  component_id: 0, // Will be 0 for new, actual ID for edit
+  course_id: 0,
+  component_name: '',
+  max_mark: 0,
+  weight_percentage: 0,
+  is_final_exam: false,
+});
+const isSavingAssessment = ref(false);
+
 
 // Computed properties for the dashboard
-const activeCourses = computed(() => lecturerCourses.value.length); // Dynamic
-const totalStudents = computed(() => students.value.length); // Now dynamic!
+const activeCourses = computed(() => lecturerCourses.value.length);
+const totalStudents = computed(() => students.value.length);
 const pendingGrading = ref(12); // Mock - will need real logic
 const classAverage = ref(78.5); // Mock - will need real logic
 
-const classPerformanceData = { // Mock data for the chart
-  labels: ['Quiz 1', 'Quiz 2', 'Assignment 1', 'Midterm', 'Assignment 2', 'Quiz 3', 'Final Exam'], // 7 elements
-  values: [75, 78, 82, 76, 85, 79, 90] // 7 elements
+const classPerformanceData = {
+  labels: ['Quiz 1', 'Quiz 2', 'Assignment 1', 'Midterm', 'Assignment 2', 'Quiz 3', 'Final Exam'],
+  values: [75, 78, 82, 76, 85, 79, 90]
 };
 
 const filteredStudents = computed(() => {
   if (!selectedCourse.value) {
-    return students.value; 
+    return students.value;
   }
   return students.value.filter(student => student.course_code === selectedCourse.value);
 });
@@ -379,7 +535,7 @@ const availableCourses = computed(() => {
   return Array.from(courses);
 });
 
-// NEW: Ref to hold lecturer's courses
+// Ref to hold lecturer's courses
 const lecturerCourses = ref<Course[]>([]);
 // Declare `courses` ref for the "Your Courses" section
 const courses = ref<Course[]>([]);
@@ -394,10 +550,9 @@ const loadingStudentMarks = ref(false);
 const isSavingGrades = ref(false);
 
 
-// NEW: Function to fetch lecturer's courses
+// Function to fetch lecturer's courses
 async function fetchLecturerCourses() {
-  // Ensure isLoading is true at the start of the fetch
-  isLoading.value = true; 
+  isLoading.value = true;
   const token = sessionStorage.getItem('token');
   const userString = sessionStorage.getItem('user');
   let user: User | null = null;
@@ -405,12 +560,12 @@ async function fetchLecturerCourses() {
   if (userString) {
     try {
       user = JSON.parse(userString);
-      currentUser.value = user; // Set currentUser here
+      currentUser.value = user;
     } catch (e) {
       console.error('Error parsing user from sessionStorage:', e);
       alert('User session data corrupted. Please log in again.');
       router.push('/login');
-      isLoading.value = false; // Set loading to false on error
+      isLoading.value = false;
       return;
     }
   }
@@ -421,7 +576,7 @@ async function fetchLecturerCourses() {
     sessionStorage.removeItem('token');
     sessionStorage.removeItem('user');
     router.push('/login');
-    isLoading.value = false; // Set loading to false on error
+    isLoading.value = false;
     return;
   }
 
@@ -445,14 +600,13 @@ async function fetchLecturerCourses() {
     }
     const data = await response.json();
     lecturerCourses.value = data.courses || [];
-    // The `courses` ref is used for the "Your Courses" section, ensure it's also updated
-    courses.value = data.courses || []; 
+    courses.value = data.courses || [];
 
   } catch (error) {
     console.error('Error fetching lecturer courses:', error);
     alert(`Error fetching lecturer courses: ${error.message}`);
   } finally {
-    isLoading.value = false; // Set loading to false after fetch completes (success or error)
+    isLoading.value = false;
   }
 }
 
@@ -465,7 +619,7 @@ async function fetchLecturerStudents() {
   }
 
   try {
-    isLoading.value = true; 
+    isLoading.value = true;
 
     const headers = {
       'Content-Type': 'application/json',
@@ -477,19 +631,19 @@ async function fetchLecturerStudents() {
     if (!response.ok) {
       throw new Error(`Failed to fetch lecturer students: ${response.statusText}`);
     }
-    
+
     const studentsData = await response.json();
-    students.value = studentsData.students; 
+    students.value = studentsData.students;
 
   } catch (error) {
     console.error('Error fetching lecturer students:', error);
   } finally {
-    isLoading.value = false; 
+    isLoading.value = false;
   }
 }
 
 async function fetchStudentMarksForCalculation(studentId: string): Promise<Mark[]> {
-  const token = sessionStorage.getItem('token'); 
+  const token = sessionStorage.getItem('token');
   const response = await fetch(`http://localhost:8219/student-marks/all/${studentId}`, {
     method: 'GET',
     headers: {
@@ -500,7 +654,7 @@ async function fetchStudentMarksForCalculation(studentId: string): Promise<Mark[
 
   if (!response.ok) {
     console.error('Failed to fetch student marks for calculation:', response.statusText);
-    return []; 
+    return [];
   }
 
   try {
@@ -512,18 +666,18 @@ async function fetchStudentMarksForCalculation(studentId: string): Promise<Mark[
       if (typeof data === 'object' && data !== null) {
         return [data];
       }
-      return []; 
+      return [];
     }
   }
   catch (error) {
     console.error('Error parsing student marks JSON for calculation:', error);
-    return []; 
+    return [];
   }
 }
 
 function calculateCurrentGrade(studentMarks: Mark[]): string {
-  let totalWeightedScoreSum = 0; 
-  let totalWeightSum = 0;       
+  let totalWeightedScoreSum = 0;
+  let totalWeightSum = 0;
 
   studentMarks.forEach((mark: Mark) => {
     const markObtained = parseFloat(mark.mark_obtained);
@@ -531,8 +685,8 @@ function calculateCurrentGrade(studentMarks: Mark[]): string {
     const weightPercentage = parseFloat(mark.weight_percentage);
 
     if (!isNaN(markObtained) && !isNaN(maxMark) && maxMark > 0 && !isNaN(weightPercentage)) {
-      const scoreRatio = markObtained / maxMark; 
-      const weightDecimal = weightPercentage / 100; 
+      const scoreRatio = markObtained / maxMark;
+      const weightDecimal = weightPercentage / 100;
 
       totalWeightedScoreSum += scoreRatio * weightDecimal;
       totalWeightSum += weightDecimal;
@@ -542,7 +696,7 @@ function calculateCurrentGrade(studentMarks: Mark[]): string {
   });
 
   if (totalWeightSum === 0) {
-    return '0.00'; 
+    return '0.00';
   }
 
   const finalGrade = (totalWeightedScoreSum / totalWeightSum) * 100;
@@ -550,12 +704,12 @@ function calculateCurrentGrade(studentMarks: Mark[]): string {
 }
 
 async function getStudentCurrentGrade(studentId: string) {
-  const marks = await fetchStudentMarksForCalculation(studentId); 
-  const grade = calculateCurrentGrade(marks); 
+  const marks = await fetchStudentMarksForCalculation(studentId);
+  const grade = calculateCurrentGrade(marks);
 
-  studentGrades[studentId] = grade; 
+  studentGrades[studentId] = grade;
 
-  return grade; 
+  return grade;
 }
 
 // Grade Entry & Management Functions
@@ -584,17 +738,18 @@ async function fetchAssessmentsForCourse() {
 
     if (!response.ok) {
       const errorData = await response.json();
-      console.error('API Error Response (Assessments):', errorData); // Debugging
+      console.error('API Error Response (Assessments):', errorData);
       throw new Error(`Failed to fetch assessments: ${errorData.error || response.statusText}`);
     }
     const data = await response.json();
-    console.log('Fetched assessments data:', data); // Debugging
+    console.log('Fetched assessments data:', data);
     assessments.value = data.assessmentComponents || [];
   } catch (error) {
     console.error('Error fetching assessments:', error);
     alert(`Error fetching assessments: ${error.message}`);
   }
-}async function fetchStudentMarks() {
+}
+async function fetchStudentMarks() {
   studentMarks.value = [];
   if (!selectedCourseForGrades.value || !selectedAssessment.value) {
     return;
@@ -615,6 +770,7 @@ async function fetchAssessmentsForCourse() {
       headers: {
         'Authorization': `Bearer ${token}`
       }
+
     });
     console.log('Headers:', {
       'Authorization': `Bearer ${token}`
@@ -639,9 +795,9 @@ async function fetchAssessmentsForCourse() {
         student_id: sm.student_id,
         full_name: sm.full_name,
         matric_number: sm.matric_number,
-        enrollment_id: sm.enrollment_id, // <--- ADD THIS LINE
+        enrollment_id: sm.enrollment_id,
         mark: sm.mark !== undefined && sm.mark !== null ? parseFloat(sm.mark) : null,
-        mark_id: sm.mark_id || null // <--- Use mark_id here
+        mark_id: sm.mark_id || null
       }));
     } else {
       console.warn('Expected data.studentMarks to be an array, but received:', data);
@@ -673,12 +829,10 @@ async function saveGrades() {
   }
 
   const marksToSubmit = studentMarks.value.map(mark => ({
-    // student_id: mark.student_id, // No longer needed in the payload for batchUpdateStudentMarks
-    enrollment_id: mark.enrollment_id, // <--- Use enrollment_id
-    assessment_id: selectedAssessment.value, // <--- Use assessment_id (renamed from assessment_component_id)
-    // course_id: selectedCourseForGrades.value, // This is not used in the batchUpdateStudentMarks loop's $markData
-    mark_obtained: typeof mark.mark === 'number' ? mark.mark : null, // <--- Backend expects mark_obtained
-    mark_id: mark.mark_id // <--- Use mark_id for existing marks
+    enrollment_id: mark.enrollment_id,
+    assessment_id: selectedAssessment.value,
+    mark_obtained: typeof mark.mark === 'number' ? mark.mark : null,
+    mark_id: mark.mark_id
   }));
 
   try {
@@ -688,8 +842,7 @@ async function saveGrades() {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${token}`
       },
-      // The backend expects an array of mark objects directly, not an object with a 'marks' key
-      body: JSON.stringify(marksToSubmit) // <--- Send the array directly
+      body: JSON.stringify(marksToSubmit)
     });
 
     if (!response.ok) {
@@ -699,7 +852,7 @@ async function saveGrades() {
 
     const result = await response.json();
     alert(result.message || 'Grades saved successfully!');
-    fetchStudentMarks(); // Re-fetch marks to ensure UI is updated
+    fetchStudentMarks();
   } catch (error) {
     console.error('Error saving grades:', error);
     alert(`Error saving grades: ${error.message}`);
@@ -708,8 +861,203 @@ async function saveGrades() {
   }
 }
 
+// Assessment Management Functions
+async function fetchLecturerAssessments() {
+  lecturerAssessments.value = [];
+  if (!selectedCourseForAssessments.value) {
+    return;
+  }
 
-onMounted(async () => { 
+  loadingAssessments.value = true;
+  const token = sessionStorage.getItem('token');
+  if (!token) {
+    alert('Authentication token missing. Please log in again.');
+    router.push('/login');
+    loadingAssessments.value = false;
+    return;
+  }
+
+  try {
+    const response = await fetch(`http://localhost:8219/assessment-components/course/${selectedCourseForAssessments.value}`, {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      console.error('API Error Response (Lecturer Assessments):', errorData);
+      throw new Error(`Failed to fetch lecturer assessments: ${errorData.error || response.statusText}`);
+    }
+    const data = await response.json();
+    lecturerAssessments.value = data.assessmentComponents || [];
+  } catch (error) {
+    console.error('Error fetching lecturer assessments:', error);
+    alert(`Error fetching lecturer assessments: ${error.message}`);
+  } finally {
+    loadingAssessments.value = false;
+  }
+}
+
+function openAssessmentModal(assessment?: AssessmentComponent) {
+  showAssessmentModal.value = true;
+  if (assessment) {
+    isEditingAssessment.value = true;
+    // Deep copy the assessment object to avoid direct mutation
+    Object.assign(assessmentForm, { ...assessment });
+  } else {
+    isEditingAssessment.value = false;
+    // Reset form for new assessment, pre-select course if one is chosen
+    Object.assign(assessmentForm, {
+      component_id: 0,
+      course_id: selectedCourseForAssessments.value || 0, // Pre-fill if course selected
+      component_name: '',
+      max_mark: 0,
+      weight_percentage: 0,
+      is_final_exam: false,
+    });
+  }
+}
+
+function closeAssessmentModal() {
+  showAssessmentModal.value = false;
+  isEditingAssessment.value = false;
+  // Reset form to default state
+  Object.assign(assessmentForm, {
+    component_id: 0,
+    course_id: 0,
+    component_name: '',
+    max_mark: 0,
+    weight_percentage: 0,
+    is_final_exam: false,
+  });
+}
+
+async function saveAssessment() {
+  isSavingAssessment.value = true;
+  const token = sessionStorage.getItem('token');
+  if (!token) {
+    alert('Authentication token missing. Please log in again.');
+    router.push('/login');
+    isSavingAssessment.value = false;
+    return;
+  }
+
+  // Basic client-side validation
+  if (!assessmentForm.course_id) {
+    alert('Please select a course for the assessment.');
+    isSavingAssessment.value = false;
+    return;
+  }
+  if (!assessmentForm.component_name.trim()) {
+    alert('Assessment Name cannot be empty.');
+    isSavingAssessment.value = false;
+    return;
+  }
+  if (assessmentForm.max_mark <= 0) {
+    alert('Max Mark must be a positive number.');
+    isSavingAssessment.value = false;
+    return;
+  }
+  if (assessmentForm.weight_percentage < 0 || assessmentForm.weight_percentage > 100) {
+    alert('Weight Percentage must be between 0 and 100.');
+    isSavingAssessment.value = false;
+    return;
+  }
+
+  try {
+    let response;
+    let url;
+    let method;
+    let payload;
+
+    if (isEditingAssessment.value) {
+      // Update existing assessment
+      url = `http://localhost:8219/assessment-components/${assessmentForm.component_id}`;
+      method = 'PUT';
+      // Only send fields that can be updated, and exclude component_id from payload
+      payload = {
+        component_name: assessmentForm.component_name,
+        max_mark: assessmentForm.max_mark,
+        weight_percentage: assessmentForm.weight_percentage,
+        // is_final_exam: assessmentForm.is_final_exam,
+        // Do NOT send course_id for update, as it's typically not changeable for an existing component
+      };
+    } else {
+      // Add new assessment
+      url = `http://localhost:8219/assessment-components`;
+      method = 'POST';
+      payload = {
+        course_id: assessmentForm.course_id,
+        component_name: assessmentForm.component_name,
+        max_mark: assessmentForm.max_mark,
+        weight_percentage: assessmentForm.weight_percentage,
+        // is_final_exam: assessmentForm.is_final_exam,
+      };
+    }
+
+    response = await fetch(url, {
+      method: method,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(`Failed to save assessment: ${errorData.error || response.statusText}`);
+    }
+
+    const result = await response.json();
+    alert(result.message || 'Assessment saved successfully!');
+    closeAssessmentModal();
+    fetchLecturerAssessments(); // Refresh the list of assessments
+  } catch (error) {
+    console.error('Error saving assessment:', error);
+    alert(`Error saving assessment: ${error.message}`);
+  } finally {
+    isSavingAssessment.value = false;
+  }
+}
+
+async function deleteAssessment(componentId: number) {
+  if (!confirm('Are you sure you want to delete this assessment? This action cannot be undone.')) {
+    return;
+  }
+
+  const token = sessionStorage.getItem('token');
+  if (!token) {
+    alert('Authentication token missing. Please log in again.');
+    router.push('/login');
+    return;
+  }
+
+  try {
+    const response = await fetch(`http://localhost:8219/assessment-components/${componentId}`, {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(`Failed to delete assessment: ${errorData.error || response.statusText}`);
+    }
+
+    const result = await response.json();
+    alert(result.message || 'Assessment deleted successfully!');
+    fetchLecturerAssessments(); // Refresh the list of assessments
+  } catch (error) {
+    console.error('Error deleting assessment:', error);
+    alert(`Error deleting assessment: ${error.message}`);
+  }
+}
+
+
+onMounted(async () => {
   const userString = sessionStorage.getItem('user');
   if (userString) {
     try {
@@ -725,27 +1073,37 @@ onMounted(async () => {
 
   // After students are fetched, calculate their grades
   watch(students, async (newStudents) => {
-    for (const student of newStudents) { 
-      await getStudentCurrentGrade(student.user_id); 
+    for (const student of newStudents) {
+      await getStudentCurrentGrade(student.user_id);
     }
-  }, { immediate: true }); // Run immediately if students are already loaded
+  }, { immediate: true });
 });
+
+// Watch for changes in selectedCourseForAssessments to automatically fetch assessments
+watch(selectedCourseForAssessments, (newVal) => {
+  if (newVal) {
+    fetchLecturerAssessments();
+  } else {
+    lecturerAssessments.value = []; // Clear assessments if no course selected
+  }
+});
+
 
 // Modal control functions
 const openEditStudentModal = (student: any) => {
-  selectedStudent.value = { ...student }; 
+  selectedStudent.value = { ...student };
   showEditStudentModal.value = true;
 };
 
 const openViewStudentDetailsModal = (student: any) => {
-  selectedStudent.value = { ...student }; 
+  selectedStudent.value = { ...student };
   showViewStudentDetailsModal.value = true;
 };
 
 const closeModals = () => {
   showEditStudentModal.value = false;
   showViewStudentDetailsModal.value = false;
-  selectedStudent.value = null; 
+  selectedStudent.value = null;
 };
 
 // Functions for Assign Student to Course Modal
@@ -755,8 +1113,8 @@ const openAssignStudentToCourseModal = () => {
 
 const closeAssignStudentToCourseModal = () => {
   showAssignStudentToCourseModal.value = false;
-  fetchLecturerCourses(); // Refresh the course list if needed
-  fetchLecturerStudents(); // Refresh the student list after new enrollments
+  fetchLecturerCourses();
+  fetchLecturerStudents();
 };
 
 const handleAssignStudentsToCourse = async (payload: { courseId: number; studentIds: number[] }) => {
@@ -783,9 +1141,8 @@ const handleAssignStudentsToCourse = async (payload: { courseId: number; student
     if (response.ok) {
       alert(result.message || 'Students assigned to course successfully!');
       closeAssignStudentToCourseModal();
-      // Re-fetch all data that might be affected by new enrollments
-      await fetchLecturerCourses(); 
-      await fetchLecturerStudents(); 
+      await fetchLecturerCourses();
+      await fetchLecturerStudents();
     } else {
       alert(`Failed to assign students: ${result.error || 'Unknown error'}`);
     }
@@ -822,16 +1179,13 @@ const handleUpdateStudent = async (updatedStudentData: any) => {
     const result = await response.json();
     alert(result.message || 'Student details updated successfully!');
     closeModals();
-    await fetchLecturerStudents(); // Refresh the student list
+    await fetchLecturerStudents();
   } catch (error) {
     console.error('Error updating student:', error);
     alert(`Error updating student: ${error.message}`);
   }
 };
 
-const createAssessment = () => {
-  alert('Create Assessment logic goes here.');
-};
 const handleFileUpload = (event: Event) => {
   const target = event.target as HTMLInputElement;
   if (target.files && target.files[0]) {
@@ -850,17 +1204,5 @@ const handleFileUpload = (event: Event) => {
 
 .btn-primary {
   @apply inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500;
-}
-
-.btn-secondary {
-  @apply inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500;
-}
-
-.card {
-  @apply bg-white shadow overflow-hidden sm:rounded-lg p-6;
-}
-
-.table-row:hover {
-  background-color: #f9fafb; /* Light gray on hover */
 }
 </style>
