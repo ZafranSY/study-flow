@@ -44,23 +44,36 @@
 <script setup lang="ts">
 import { ref, reactive, watch } from 'vue';
 
+// --- Component Properties ---
+// Defines the props this modal component accepts from its parent.
+// 'show': A boolean to control the visibility of the modal.
 const props = defineProps<{
   show: boolean;
 }>();
 
+// --- Component Events ---
+// Declares the custom events that this component can emit to its parent.
+// 'close': Emitted when the modal should be closed (e.g., clicking cancel).
+// 'add-student': Emitted when the form is submitted, carrying the new student's data.
 const emit = defineEmits(['close', 'add-student']);
 
+// --- Reactive Form State ---
+// Uses Vue's `reactive` to create an object that holds the form's input values.
+// This object will be two-way bound to the input fields in the template.
 const form = reactive({
   full_name: '',
   username: '',
   email: '',
   matric_number: '',
   password: '',
-  role: 'student', // Default role for added students
+  role: 'student', // Sets a default role for any new user created through this form.
   profile_picture: ''
 });
 
-// Reset form when modal is opened/closed
+// --- Watcher for Form Reset ---
+// Watches the `show` prop. When the modal is closed (`show` becomes false),
+// this function triggers and resets all the fields in the form to their initial state.
+// This ensures the form is clean every time it's opened.
 watch(() => props.show, (newValue) => {
   if (!newValue) {
     Object.assign(form, {
@@ -75,6 +88,10 @@ watch(() => props.show, (newValue) => {
   }
 });
 
+// --- Form Submission Handler ---
+// This function is called when the form's submit button is clicked.
+// It prevents the default browser form submission and instead emits the 'add-student' event.
+// A copy of the form data is sent as the event's payload to the parent component.
 const submitForm = () => {
   emit('add-student', { ...form }); // Emit a copy of the form data
 };

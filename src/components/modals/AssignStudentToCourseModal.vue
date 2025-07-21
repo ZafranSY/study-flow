@@ -49,12 +49,15 @@
 <script lang="ts">
 import { defineComponent, ref, watch } from 'vue';
 
+// --- Type Definitions ---
+// Defines the structure for a Course object.
 interface Course {
   course_id: number;
   course_code: string;
   course_name: string;
 }
 
+// Defines the structure for a Student object.
 interface Student {
   user_id: number;
   username: string;
@@ -66,24 +69,32 @@ interface Student {
 
 export default defineComponent({
   name: 'AssignStudentToCourseModal',
+  // --- Component Properties ---
   props: {
+    // A boolean to control the visibility of the modal from the parent.
     show: {
       type: Boolean,
       required: true
     },
-    lecturerCourses: { // Prop to receive courses taught by the lecturer
+    // An array of courses taught by the lecturer, passed from the parent.
+    lecturerCourses: { 
       type: Array as () => Course[],
       default: () => []
     }
   },
+  // --- Component Events ---
+  // Declares the events this component can emit to its parent.
   emits: ['close', 'assign-students'],
+  // --- Component Logic ---
   setup(props, { emit }) {
-    const selectedCourseId = ref<number | ''>('');
-    const eligibleStudents = ref<Student[]>([]);
-    const selectedStudentIds = ref<number[]>([]);
-    const loadingEligibleStudents = ref(false);
+    // --- Reactive State ---
+    const selectedCourseId = ref<number | ''>(''); // Stores the ID of the selected course.
+    const eligibleStudents = ref<Student[]>([]); // Stores the list of students eligible for the selected course.
+    const selectedStudentIds = ref<number[]>([]); // Stores the IDs of the students selected via checkbox.
+    const loadingEligibleStudents = ref(false); // A flag to indicate when the student list is being fetched.
 
-    // Reset form state when modal is closed
+    // --- Watcher ---
+    // Watches the 'show' prop to reset the form's state whenever the modal is closed.
     watch(() => props.show, (newValue) => {
       if (!newValue) {
         selectedCourseId.value = '';
@@ -93,7 +104,10 @@ export default defineComponent({
       }
     });
 
+    // --- API Call ---
+    // Fetches students who are not yet enrolled in the selected course.
     const fetchEligibleStudents = async () => {
+      // If no course is selected, clear the student list.
       if (!selectedCourseId.value) {
         eligibleStudents.value = [];
         selectedStudentIds.value = [];
@@ -101,9 +115,10 @@ export default defineComponent({
       }
 
       loadingEligibleStudents.value = true;
-      const token = sessionStorage.getItem('token');
+      const token = sessionStorage.getItem('token'); // Retrieve auth token for the API request.
 
       try {
+        // Makes a GET request to the backend endpoint.
         const response = await fetch(`http://localhost:8219/enrollments/${selectedCourseId.value}/eligible-students`, {
           headers: {
             'Authorization': `Bearer ${token}`
@@ -114,19 +129,24 @@ export default defineComponent({
           throw new Error(`Failed to fetch eligible students: ${response.statusText}`);
         }
         const data = await response.json();
+        // Updates the reactive state with the fetched students.
         eligibleStudents.value = data.eligibleStudents || [];
-        selectedStudentIds.value = []; // Clear selections when course changes
+        selectedStudentIds.value = []; // Clear previous selections when the course changes.
       } catch (error) {
         console.error('Error fetching eligible students:', error);
         alert('Failed to load eligible students.');
         eligibleStudents.value = [];
       } finally {
-        loadingEligibleStudents.value = false;
+        loadingEligibleStudents.value = false; // Set loading state to false.
       }
     };
 
+    // --- Form Submission ---
+    // Handles the form submission logic.
     const submitAssignment = () => {
+      // Validates that a course and at least one student are selected.
       if (selectedCourseId.value && selectedStudentIds.value.length > 0) {
+        // Emits an event to the parent component with the selected data.
         emit('assign-students', {
           courseId: selectedCourseId.value,
           studentIds: selectedStudentIds.value
@@ -136,6 +156,7 @@ export default defineComponent({
       }
     };
 
+    // Exposes the state and methods to the template.
     return {
       selectedCourseId,
       eligibleStudents,
