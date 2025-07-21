@@ -594,8 +594,7 @@ async function fetchAssessmentsForCourse() {
     console.error('Error fetching assessments:', error);
     alert(`Error fetching assessments: ${error.message}`);
   }
-}
-async function fetchStudentMarks() {
+}async function fetchStudentMarks() {
   studentMarks.value = [];
   if (!selectedCourseForGrades.value || !selectedAssessment.value) {
     return;
@@ -611,22 +610,20 @@ async function fetchStudentMarks() {
   }
 
   try {
-    console.log(`Fetching student marks for course: ${selectedCourseForGrades.value}, assessment: ${selectedAssessment.value}`); // Debugging
+    console.log(`Fetching student marks for course: ${selectedCourseForGrades.value}, assessment: ${selectedAssessment.value}`);
     const response = await fetch(`http://localhost:8219/student-marks/course/${selectedCourseForGrades.value}/assessment/${selectedAssessment.value}`, {
       headers: {
         'Authorization': `Bearer ${token}`
       }
-      
     });
-console.log('Headers:', {
-  'Authorization': `Bearer ${token}`
-});
+    console.log('Headers:', {
+      'Authorization': `Bearer ${token}`
+    });
 
     if (!response.ok) {
       const errorData = await response.json();
-      console.error('API Error Response (Student Marks):', errorData); // Debugging
+      console.error('API Error Response (Student Marks):', errorData);
 
-      // Specific error handling for 401 Unauthorized
       if (response.status === 401) {
         alert('Your session has expired. Please log in again.');
         router.push('/login');
@@ -635,16 +632,16 @@ console.log('Headers:', {
     }
 
     const data = await response.json();
-    console.log('Fetched student marks data:', data); // Debugging
+    console.log('Fetched student marks data:', data);
 
-    // Ensure data.studentMarks is an array before mapping
     if (data.studentMarks && Array.isArray(data.studentMarks)) {
       studentMarks.value = data.studentMarks.map((sm: any) => ({
         student_id: sm.student_id,
         full_name: sm.full_name,
         matric_number: sm.matric_number,
+        enrollment_id: sm.enrollment_id, // <--- ADD THIS LINE
         mark: sm.mark !== undefined && sm.mark !== null ? parseFloat(sm.mark) : null,
-        student_mark_id: sm.student_mark_id || null // Include student_mark_id for updates
+        mark_id: sm.mark_id || null // <--- Use mark_id here
       }));
     } else {
       console.warn('Expected data.studentMarks to be an array, but received:', data);
@@ -676,11 +673,12 @@ async function saveGrades() {
   }
 
   const marksToSubmit = studentMarks.value.map(mark => ({
-    student_id: mark.student_id,
-    assessment_component_id: selectedAssessment.value,
-    course_id: selectedCourseForGrades.value,
-    mark: typeof mark.mark === 'number' ? mark.mark : null,
-    student_mark_id: mark.student_mark_id // Include for updates
+    // student_id: mark.student_id, // No longer needed in the payload for batchUpdateStudentMarks
+    enrollment_id: mark.enrollment_id, // <--- Use enrollment_id
+    assessment_id: selectedAssessment.value, // <--- Use assessment_id (renamed from assessment_component_id)
+    // course_id: selectedCourseForGrades.value, // This is not used in the batchUpdateStudentMarks loop's $markData
+    mark_obtained: typeof mark.mark === 'number' ? mark.mark : null, // <--- Backend expects mark_obtained
+    mark_id: mark.mark_id // <--- Use mark_id for existing marks
   }));
 
   try {
@@ -690,7 +688,8 @@ async function saveGrades() {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${token}`
       },
-      body: JSON.stringify({ marks: marksToSubmit })
+      // The backend expects an array of mark objects directly, not an object with a 'marks' key
+      body: JSON.stringify(marksToSubmit) // <--- Send the array directly
     });
 
     if (!response.ok) {
