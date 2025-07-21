@@ -10,7 +10,7 @@ import UserManagement from '../views/UserManagement.vue'
 import Reports from '../views/Reports.vue'
 import Profile from '../views/Profile.vue'
 import LecturerMark from '../views/LecturerMark.vue' // <--- ADD THIS IMPORT
-
+import LecturerCourses from '../views/LecturerCourses.vue' 
 const router = createRouter({
     history: createWebHistory(),
     routes: [
@@ -60,6 +60,7 @@ const router = createRouter({
             component: AdvisorDashboard,
             meta: { requiresAuth: true, role: 'advisor' }
         },
+      
         {
             path: '/advisor/reports',
             name: 'Reports',
@@ -78,12 +79,21 @@ const router = createRouter({
             component: UserManagement,
             meta: { requiresAuth: true, role: 'admin' }
         },
+
+        {
+            path: '/lecturer/courses',
+            name: 'LecturerCourses',
+            component: LecturerCourses,
+            meta: { requiresAuth: true, role: 'lecturer' }
+        },
+
         {
             path: '/profile',
             name: 'Profile',
             component: Profile,
             meta: { requiresAuth: true }
         }
+
     ]
 })
 
