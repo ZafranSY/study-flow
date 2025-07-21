@@ -5,6 +5,7 @@ import StudentGrades from '../views/StudentGrades.vue'
 import StudentProgress from '../views/StudentProgress.vue'
 import LecturerDashboard from '../views/LecturerDashboard.vue'
 import AdvisorDashboard from '../views/AdvisorDashboard.vue'
+import AdvisorAdvisees from '../views/AdvisorAdvisees.vue'
 import AdminDashboard from '../views/AdminDashboard.vue'
 import UserManagement from '../views/UserManagement.vue'
 import Reports from '../views/Reports.vue'
@@ -61,6 +62,13 @@ const router = createRouter({
             meta: { requiresAuth: true, role: 'advisor' }
         },
       
+          {
+            path: '/advisor/advisees',
+            name: 'AdvisorAdvisees',
+            component: AdvisorAdvisees,
+            meta: { requiresAuth: true, role: 'advisor' }
+        },
+
         {
             path: '/advisor/reports',
             name: 'Reports',

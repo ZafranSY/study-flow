@@ -41,7 +41,7 @@
                             <router-link to="/advisor" class="nav-link">
                                 Dashboard
                             </router-link>
-                            <a href="/advisor/reports" class="nav-link">
+                            <a href="/advisor/advisees" class="nav-link">
                                 Advisees
                             </a>
                             <router-link to="/advisor/reports" class="nav-link">

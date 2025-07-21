@@ -1,3 +1,270 @@
+<script setup lang="ts">
+import { ref, computed, onMounted } from 'vue';
+import { useRouter } from 'vue-router';
+import Navigation from '../components/shared/Navigation.vue';
+import ViewStudentDetailsModal from '../components/modals/ViewStudentModal.vue';
+import LogMeetingModal from '../components/modals/LogMeetingModal.vue';
+
+// ... (interfaces and state variables remain the same) ...
+interface Advisee {
+  advisor_student_id: number;
+  student_id: number;
+  student_name: string;
+  matric_number: string;
+  student_email: string;
+  profile_picture?: string;
+  gpa: number;
+  status: string;
+  last_meeting_date?: string;
+}
+
+interface StudentMark {
+    course_id: number;
+    mark_obtained: string;
+    max_mark: string;
+    weight_percentage: string;
+    credit_hours: string;
+}
+
+const router = useRouter();
+const advisees = ref<Advisee[]>([]);
+const isLoading = ref(false);
+const message = ref('');
+const errorMessage = ref('');
+const searchQuery = ref('');
+const showViewStudentModal = ref(false);
+const selectedStudent = ref<any | null>(null);
+const showLogMeetingModal = ref(false);
+const studentToLogMeeting = ref<Advisee | null>(null);
+
+const API_BASE_URL = 'http://localhost:8219';
+
+const getAuthHeaders = () => {
+  const token = sessionStorage.getItem('token');
+  if (!token) {
+    errorMessage.value = 'Authentication error. Please log in again.';
+    router.push('/login');
+    return null;
+  }
+  return { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` };
+};
+
+// --- THIS IS THE CORRECTED FUNCTION ---
+/**
+ * Handles the 'save-note' event from the modal and sends data to the backend.
+ */
+const handleSaveNote = async (noteData: { meeting_date: string, note_content: string }) => {
+  if (!studentToLogMeeting.value) return;
+
+  message.value = '';
+  errorMessage.value = '';
+
+  try {
+    const headers = getAuthHeaders();
+    if (!headers) return;
+    
+    // FINAL PAYLOAD: This now perfectly matches the database schema.
+    const payload = {
+      advisor_student_id: studentToLogMeeting.value.advisor_student_id,
+      meeting_date: noteData.meeting_date,
+      note_content: noteData.note_content,
+    };
+    
+    const response = await fetch(`${API_BASE_URL}/advisor-notes`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(payload),
+    });
+
+    const result = await response.json();
+    if (!response.ok) {
+      throw new Error(result.error || 'Failed to save note');
+    }
+
+    message.value = result.message || 'Meeting note saved successfully!';
+    closeLogMeetingModal();
+    fetchAdvisees(); 
+
+  } catch (error: any) {
+    errorMessage.value = error.message;
+  }
+};
+
+// ... (The rest of your script setup remains unchanged. I'm including it for completeness) ...
+const fetchAdvisees = async () => {
+  isLoading.value = true;
+  errorMessage.value = '';
+  try {
+    const headers = getAuthHeaders();
+    if (!headers) return;
+
+    const response = await fetch(`${API_BASE_URL}/advisor-student`, { headers });
+    if (!response.ok) throw new Error('Failed to fetch advisee list.');
+    
+    const baseAdvisees = await response.json();
+    
+    const detailedAdvisees = await Promise.all(
+      baseAdvisees.map(async (advisee: any) => {
+        const [marks, userDetails] = await Promise.all([
+            fetchStudentMarks(advisee.student_id),
+            fetchUserDetails(advisee.student_id)
+        ]);
+        
+        const gpa = calculateGPA(marks);
+        const status = gpa >= 2.5 ? 'Good Standing' : 'At Risk';
+
+        return {
+          ...advisee,
+          gpa,
+          status,
+          profile_picture: userDetails?.profile_picture,
+        };
+      })
+    );
+    advisees.value = detailedAdvisees;
+
+  } catch (error: any) {
+    errorMessage.value = error.message;
+  } finally {
+    isLoading.value = false;
+  }
+};
+
+const fetchUserDetails = async (userId: number) => {
+    try {
+        const headers = getAuthHeaders();
+        if (!headers) return null;
+        const response = await fetch(`${API_BASE_URL}/users/${userId}`, { headers });
+        if (!response.ok) return null;
+        return await response.json();
+    } catch (error) {
+        console.error(`Error fetching user details for ${userId}:`, error);
+        return null;
+    }
+};
+
+const fetchStudentMarks = async (studentId: number): Promise<StudentMark[]> => {
+    try {
+        const headers = getAuthHeaders();
+        if (!headers) return [];
+        const response = await fetch(`${API_BASE_URL}/student-marks/all/${studentId}`, { headers });
+        if (!response.ok) return [];
+        return await response.json();
+    } catch (error) {
+        console.error(`Error fetching marks for student ${studentId}:`, error);
+        return [];
+    }
+};
+
+const calculateGPA = (studentMarks: StudentMark[]): number => {
+  if (!studentMarks || studentMarks.length === 0) return 0.0;
+  const courseData: { [key: number]: { totalWeightedScore: number; totalWeight: number; creditHours: number } } = {};
+  studentMarks.forEach(mark => {
+    const markObtainedNum = parseFloat(mark.mark_obtained) || 0;
+    const maxMarkNum = parseFloat(mark.max_mark) || 0;
+    const weightNum = parseFloat(mark.weight_percentage) || 0;
+    const creditHoursNum = parseFloat(mark.credit_hours) || 0;
+    if (maxMarkNum === 0 || creditHoursNum === 0) return;
+    if (!courseData[mark.course_id]) {
+      courseData[mark.course_id] = { totalWeightedScore: 0, totalWeight: 0, creditHours: creditHoursNum };
+    }
+    courseData[mark.course_id].totalWeightedScore += (markObtainedNum / maxMarkNum) * weightNum;
+    courseData[mark.course_id].totalWeight += weightNum;
+  });
+  let totalGradePoints = 0;
+  let totalCreditHours = 0;
+  for (const courseId in courseData) {
+    const course = courseData[courseId];
+    if (course.totalWeight > 0) {
+      const finalPercentage = (course.totalWeightedScore / course.totalWeight) * 100;
+      const gradePoint = convertPercentageToGradePoint(finalPercentage);
+      totalGradePoints += gradePoint * course.creditHours;
+      totalCreditHours += course.creditHours;
+    }
+  }
+  return totalCreditHours === 0 ? 0 : totalGradePoints / totalCreditHours;
+};
+
+const convertPercentageToGradePoint = (percentage: number): number => {
+  if (percentage >= 90) return 4.0;
+  if (percentage >= 80) return 3.0;
+  if (percentage >= 70) return 2.0;
+  if (percentage >= 60) return 1.0;
+  return 0.0;
+};
+
+const filteredAdvisees = computed(() => {
+  if (!searchQuery.value) return advisees.value;
+  const query = searchQuery.value.toLowerCase();
+  return advisees.value.filter(student =>
+    student.student_name?.toLowerCase().includes(query) ||
+    student.matric_number?.toLowerCase().includes(query)
+  );
+});
+
+const getStatusColor = (status?: string) => {
+  if (status === 'At Risk') return 'bg-red-100 text-red-800';
+  if (status === 'Good Standing') return 'bg-green-100 text-green-800';
+  return 'bg-gray-100 text-gray-800';
+};
+
+const getGpaColor = (gpa?: number) => {
+  if (gpa === undefined) return 'text-gray-500';
+  if (gpa < 2.5) return 'text-red-600';
+  if (gpa < 3.5) return 'text-yellow-600';
+  return 'text-green-600';
+}
+
+const formatDate = (dateString?: string) => {
+    if (!dateString) return 'N/A';
+    try {
+        const date = new Date(dateString + 'T00:00:00Z');
+        return date.toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric',
+            timeZone: 'UTC'
+        });
+    } catch (e) {
+        return 'Invalid Date';
+    }
+};
+
+const viewStudentDetails = (student: Advisee) => {
+    const modalPayload = {
+      user_id: student.student_id,
+      full_name: student.student_name,
+      username: student.student_name,
+      email: student.student_email,
+      matric_number: student.matric_number,
+      profile_picture: student.profile_picture,
+      role: 'student',
+      course_code: 'Multiple',
+      current_grade: student.gpa.toFixed(2) + ' GPA'
+    };
+    selectedStudent.value = modalPayload;
+    showViewStudentModal.value = true;
+};
+
+const openLogMeetingModal = (student: Advisee) => {
+  studentToLogMeeting.value = student;
+  showLogMeetingModal.value = true;
+};
+
+const closeLogMeetingModal = () => {
+  showLogMeetingModal.value = false;
+  studentToLogMeeting.value = null;
+};
+
+const closeModals = () => {
+    showViewStudentModal.value = false;
+    selectedStudent.value = null;
+};
+
+onMounted(fetchAdvisees);
+
+</script>
+
 <template>
   <div class="min-h-screen bg-gray-50">
     <Navigation />
@@ -39,12 +306,13 @@
                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Contact</th>
                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">GPA</th>
                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Last Meeting</th>
                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
             <tbody class="bg-white divide-y divide-gray-200">
               <tr v-if="filteredAdvisees.length === 0">
-                <td colspan="5" class="px-6 py-4 text-center text-gray-500">
+                <td colspan="6" class="px-6 py-4 text-center text-gray-500">
                   No advisees found matching your search.
                 </td>
               </tr>
@@ -69,9 +337,12 @@
                     {{ student.status || 'N/A' }}
                   </span>
                 </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {{ formatDate(student.last_meeting_date) }}
+                </td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-3">
                   <button @click="viewStudentDetails(student)" class="text-primary-600 hover:text-primary-900">View Details</button>
-                  <button @click="logConsultation(student)" class="text-secondary-600 hover:text-secondary-900">Log Meeting</button>
+                  <button @click="openLogMeetingModal(student)" class="text-secondary-600 hover:text-secondary-900">Log Meeting</button>
                 </td>
               </tr>
             </tbody>
@@ -81,199 +352,12 @@
     </div>
 
     <ViewStudentDetailsModal :show="showViewStudentModal" :student="selectedStudent" @close="closeModals" />
+    
+    <LogMeetingModal 
+      :show="showLogMeetingModal" 
+      :student="studentToLogMeeting"
+      @close="closeLogMeetingModal"
+      @save-note="handleSaveNote"
+    />
   </div>
 </template>
-
-<script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue';
-import { useRouter } from 'vue-router';
-import Navigation from '../components/shared/Navigation.vue';
-import ViewStudentDetailsModal from '../components/modals/ViewStudentModal.vue';
-
-interface Advisee {
-  student_id: number;
-  student_name: string;
-  matric_number: string;
-  student_email: string;
-  profile_picture?: string;
-  gpa?: number;
-  status?: string;
-}
-
-const router = useRouter();
-const advisees = ref<Advisee[]>([]);
-const isLoading = ref(false);
-const message = ref('');
-const errorMessage = ref('');
-const searchQuery = ref('');
-
-const showViewStudentModal = ref(false);
-const selectedStudent = ref<Advisee | null>(null);
-
-const API_BASE_URL = 'http://localhost:8219';
-
-const getAuthHeaders = () => {
-  const token = sessionStorage.getItem('token');
-  if (!token) {
-    errorMessage.value = 'Authentication error. Please log in again.';
-    router.push('/login');
-    return null;
-  }
-  return {
-    'Content-Type': 'application/json',
-    'Authorization': `Bearer ${token}`,
-  };
-};
-
-const fetchAdvisees = async () => {
-  isLoading.value = true;
-  errorMessage.value = '';
-  try {
-    const headers = getAuthHeaders();
-    if (!headers) return;
-
-    const response = await fetch(`${API_BASE_URL}/advisor-student`, { headers });
-    if (!response.ok) throw new Error('Failed to fetch advisee list.');
-    
-    const data = await response.json();
-    
-    // Fetch GPA for each student concurrently
-    const adviseesWithDetails = await Promise.all(
-      data.map(async (advisee: any) => {
-        const marks = await fetchStudentMarks(advisee.student_id);
-        const gpa = calculateGPA(marks);
-        const status = gpa >= 2.5 ? 'Good Standing' : 'At Risk';
-        
-        // We need user details for the profile picture
-        const userDetails = await fetchUserDetails(advisee.student_id);
-
-        return {
-            ...advisee,
-            gpa,
-            status,
-            profile_picture: userDetails?.profile_picture,
-        };
-      })
-    );
-    advisees.value = adviseesWithDetails;
-
-  } catch (error: any) {
-    errorMessage.value = error.message;
-  } finally {
-    isLoading.value = false;
-  }
-};
-
-const fetchUserDetails = async (userId: number) => {
-    try {
-        const headers = getAuthHeaders();
-        if (!headers) return null;
-        const response = await fetch(`${API_BASE_URL}/users/${userId}`, { headers });
-        if (!response.ok) return null;
-        return await response.json();
-    } catch (error) {
-        console.error(`Error fetching user details for ${userId}:`, error);
-        return null;
-    }
-};
-
-const fetchStudentMarks = async (studentId: number) => {
-    try {
-        const headers = getAuthHeaders();
-        if (!headers) return [];
-        const response = await fetch(`${API_BASE_URL}/student-marks/all/${studentId}`, { headers });
-        if (!response.ok) return [];
-        return await response.json();
-    } catch (error) {
-        console.error(`Error fetching marks for student ${studentId}:`, error);
-        return [];
-    }
-};
-
-const calculateGPA = (studentMarks: any[]): number => {
-  const courseGrades: { [courseId: number]: { totalWeightedScore: number; totalWeight: number; creditHours: number } } = {};
-
-  studentMarks.forEach(mark => {
-    const { course_id, mark_obtained, max_mark, weight_percentage, credit_hours } = mark;
-    const markObtainedNum = parseFloat(mark_obtained);
-    const maxMarkNum = parseFloat(max_mark);
-    const weightNum = parseFloat(weight_percentage);
-    const creditHoursNum = parseFloat(credit_hours);
-
-    if (isNaN(markObtainedNum) || isNaN(maxMarkNum) || isNaN(weightNum) || isNaN(creditHoursNum) || maxMarkNum === 0) return;
-
-    if (!courseGrades[course_id]) {
-      courseGrades[course_id] = { totalWeightedScore: 0, totalWeight: 0, creditHours: creditHoursNum };
-    }
-
-    courseGrades[course_id].totalWeightedScore += (markObtainedNum / maxMarkNum) * weightNum;
-    courseGrades[course_id].totalWeight += weightNum;
-  });
-
-  let totalGradePoints = 0;
-  let totalCreditHours = 0;
-
-  for (const courseId in courseGrades) {
-    const course = courseGrades[courseId];
-    if (course.totalWeight > 0) {
-      const finalPercentage = (course.totalWeightedScore / course.totalWeight) * 100;
-      const gradePoint = convertPercentageToGradePoint(finalPercentage);
-      totalGradePoints += gradePoint * course.creditHours;
-      totalCreditHours += course.creditHours;
-    }
-  }
-
-  return totalCreditHours === 0 ? 0 : totalGradePoints / totalCreditHours;
-};
-
-const convertPercentageToGradePoint = (percentage: number): number => {
-  if (percentage >= 90) return 4.0;
-  if (percentage >= 80) return 3.0;
-  if (percentage >= 70) return 2.0;
-  if (percentage >= 60) return 1.0;
-  return 0.0;
-};
-
-const filteredAdvisees = computed(() => {
-  if (!searchQuery.value) return advisees.value;
-  const query = searchQuery.value.toLowerCase();
-  return advisees.value.filter(student =>
-    student.student_name?.toLowerCase().includes(query) ||
-    student.matric_number?.toLowerCase().includes(query)
-  );
-});
-
-const getStatusColor = (status?: string) => {
-  if (status === 'At Risk') return 'bg-red-100 text-red-800';
-  if (status === 'Good Standing') return 'bg-green-100 text-green-800';
-  return 'bg-gray-100 text-gray-800';
-};
-
-const getGpaColor = (gpa?: number) => {
-  if (gpa === undefined) return 'text-gray-500';
-  if (gpa < 2.5) return 'text-red-600';
-  if (gpa < 3.5) return 'text-yellow-600';
-  return 'text-green-600';
-}
-
-const viewStudentDetails = (student: Advisee) => {
-    // The backend /users/{id} endpoint expects a `user_id`, which is `student_id` here
-    const userPayload = { ...student, user_id: student.student_id, full_name: student.student_name, course_code: '' };
-    selectedStudent.value = userPayload;
-    showViewStudentModal.value = true;
-};
-
-const logConsultation = (student: Advisee) => {
-    // This could open a new modal or navigate to a different page
-    alert(`Navigating to log consultation for ${student.student_name}.`);
-    // Example navigation: router.push(`/advisor/consultations/${student.student_id}`);
-};
-
-const closeModals = () => {
-    showViewStudentModal.value = false;
-    selectedStudent.value = null;
-};
-
-onMounted(fetchAdvisees);
-
-</script>
