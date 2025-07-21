@@ -98,7 +98,8 @@
                                             <p class="text-gray-500 text-xs mt-1">{{ new Date(notification.created_at).toLocaleString() }}</p>
                                         </a>
                                     </MenuItem>
-                                    <MenuItem v-if="unreadNotificationCount > 0" v-slot="{ active }">
+                                    <!-- Changed v-if condition here -->
+                                    <MenuItem v-if="notifications.length > 0" v-slot="{ active }">
                                         <button @click="markAllAsRead"
                                             :class="[active ? 'bg-gray-100' : '', 'block w-full text-center px-4 py-2 text-sm text-primary-600 font-medium border-t border-gray-100']">
                                             Mark all as read
@@ -157,7 +158,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { Menu, MenuButton, MenuItem, MenuItems } from '@headlessui/vue'
 import { BellIcon, ChevronDownIcon } from '@heroicons/vue/24/outline'
 import { useRouter } from 'vue-router'
@@ -188,8 +189,10 @@ const router = useRouter()
 const currentUser = ref<User | null>(null) // Initialize as null or default user object
 const notifications = ref<Notification[]>([]); // To store all fetched notifications
 const unreadNotificationCount = ref(0); // To store the count of unread notifications
+let pollingInterval: number | null = null; // To store the interval ID
 
 const API_BASE_URL = 'http://localhost:8219'; // Your backend API base URL
+const POLLING_INTERVAL_MS = 30000; // Poll every 30 seconds
 
 onMounted(() => {
     // Retrieve user data from sessionStorage on component mount
@@ -198,15 +201,39 @@ onMounted(() => {
         try {
             currentUser.value = JSON.parse(userData);
             // Fetch notifications only if a user is logged in
-            if (currentUser.value?.token) {
-                fetchNotifications();
+            if (sessionStorage.getItem('token')) {
+                fetchNotifications(); // Initial fetch
+                // Start polling for new notifications
+                pollingInterval = setInterval(fetchNotifications, POLLING_INTERVAL_MS) as unknown as number; // Explicitly cast to number
             }
         } catch (e) {
             console.error("Failed to parse user data from sessionStorage:", e);
             currentUser.value = null;
         }
     }
+
+    // Add visibility change listener
+    document.addEventListener('visibilitychange', handleVisibilityChange);
 });
+
+onUnmounted(() => {
+    // Clear the polling interval when the component is unmounted
+    if (pollingInterval) {
+        clearInterval(pollingInterval);
+    }
+    // Remove visibility change listener
+    document.removeEventListener('visibilitychange', handleVisibilityChange);
+});
+
+/**
+ * Handles visibility change of the document.
+ * If the document becomes visible, re-fetch notifications.
+ */
+const handleVisibilityChange = () => {
+    if (document.visibilityState === 'visible' && sessionStorage.getItem('token')) {
+        fetchNotifications();
+    }
+};
 
 /**
  * Fetches notifications from the backend API.
@@ -254,7 +281,7 @@ const fetchNotifications = async () => {
  * @param notificationId The ID of the notification to mark as read.
  */
 const markNotificationAsRead = async (notificationId: number) => {
-    if (!currentUser.value?.token) {
+    if (!sessionStorage.getItem('token')) {
         console.warn("No authentication token found. Cannot mark notification as read.");
         return;
     }
@@ -288,19 +315,22 @@ const markNotificationAsRead = async (notificationId: number) => {
 };
 
 /**
- * Marks all unread notifications for the current user as read.
+ * Marks all notifications for the current user as read.
  */
 const markAllAsRead = async () => {
-    if (!currentUser.value?.token) {
+    if (!sessionStorage.getItem('token')) {
         console.warn("No authentication token found. Cannot mark all notifications as read.");
         return;
     }
 
-    const unreadNotifications = notifications.value.filter(n => n.is_read === 0);
-    for (const notification of unreadNotifications) {
-        await markNotificationAsRead(notification.notification_id);
+    // Iterate over all notifications and mark them as read
+    // We don't filter by unread here, as the request is to make "mark as read" available for all
+    for (const notification of notifications.value) { // Iterate over all, not just unread
+        if (notification.is_read === 0) { // Only send API call if it's actually unread
+            await markNotificationAsRead(notification.notification_id);
+        }
     }
-    // Re-fetch to ensure consistency, though optimistic updates should mostly cover it
+    // Re-fetch to ensure consistency after all individual updates
     fetchNotifications();
 };
 
