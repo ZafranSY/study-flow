@@ -308,12 +308,35 @@ const overallCoursePerformance = computed(() => {
  * Converts a percentage mark to a GPA grade point.
  */
 const convertPercentageToGradePoint = (percentage: number): number => {
-    if (percentage >= 90) return 4.0;
-    if (percentage >= 80) return 3.0;
-    if (percentage >= 70) return 2.0;
-    if (percentage >= 60) return 1.0;
-    return 0.0;
+    if (percentage >= 90) {
+        return 4.00;
+    } else if (percentage >= 80) { // 80-89
+        return 4.00; // Note: A and A+ both give 4.00 based on your table
+    } else if (percentage >= 75) { // 75-79
+        return 3.67;
+    } else if (percentage >= 70) { // 70-74
+        return 3.33;
+    } else if (percentage >= 65) { // 65-69
+        return 3.00;
+    } else if (percentage >= 60) { // 60-64
+        return 2.67;
+    } else if (percentage >= 55) { // 55-59
+        return 2.33;
+    } else if (percentage >= 50) { // 50-54
+        return 2.00;
+    } else if (percentage >= 45) { // 45-49
+        return 1.67;
+    } else if (percentage >= 40) { // 40-44
+        return 1.33;
+    } else if (percentage >= 35) { // 35-39
+        return 1.00;
+    } else if (percentage >= 30) { // 30-34
+        return 0.67;
+    } else { // 00-29
+        return 0.00;
+    }
 };
+
 
 /**
  * Computed property for detailed mark breakdown for a selected course.
