@@ -5,8 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vue-tsc -b && vite build",
-    "preview": "vite preview"
+    "build": "vue-tsc -b --noEmit && vite build",
+    "build:docker": "vite build"
   },
   "dependencies": {
     "vue": "^3.4.38",

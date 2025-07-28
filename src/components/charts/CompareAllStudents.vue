@@ -222,6 +222,11 @@ const fetchPeerData = async () => {
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'An error occurred';
     console.error('Error fetching peer data:', err);
+    if (err instanceof Error) {
+      error.value = err.message;
+    } else {
+      error.value = 'An unexpected error occurred';
+    }
   } finally {
     loading.value = false;
   }
